@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>念念信箱</title>
+    <link rel="stylesheet" href="mail.css">
+</head>
+<body>
+    <div class="app">
+        <div class="mail-header">
+            <div class="mail-header-left">
+                <div class="mail-back" onclick="goBack()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <span class="mail-header-title">信箱</span>
+            </div>
+        </div>
+
+        <div class="penpal-filter" id="penpalFilter"></div>
+
+        <div class="mail-list" id="envelopeWall"></div>
+
+        <div class="letter-detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+        <div class="letter-detail" id="detailPanel">
+            <div class="letter-detail-header">
+                <div class="mail-back" onclick="closeDetail()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <span class="mail-header-title" id="detailTitle">信件</span>
+                <div class="mail-mark-read-btn" onclick="closeDetail()">完成</div>
+            </div>
+            <div class="letter-detail-body" id="detailBody"></div>
+            <div class="reply-compose" id="replyCompose">
+                <textarea class="reply-compose-input" id="replyComposeInput" placeholder="写下你的回信..."></textarea>
+                <div class="reply-compose-actions">
+                    <button class="letter-reply-btn secondary" onclick="cancelReply()">取消</button>
+                    <button class="letter-reply-btn primary" id="replyComposeSend" onclick="sendReply()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="mail.js"></script>
+</body>
+</html>

@@ -1,0 +1,4236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>念念 - AI 日记</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --safe-area-top: env(safe-area-inset-top, 0px);
+            --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+            --bg: #f5f0e6;
+            --bg-card: #fdfaf3;
+            --card: #fdfaf3;
+            --text: #2a2418;
+            --text-secondary: #5e574b;
+            --text-muted: #968d7e;
+            --accent: #a85a2a;
+            --accent-light: rgba(168, 90, 42, 0.08);
+            --accent-glow: rgba(168, 90, 42, 0.25);
+            --border: rgba(60, 40, 20, 0.1);
+            --ink-faint: #c2b8a8;
+            --radius: 16px;
+            --radius-sm: 12px;
+            --shadow-card: 0 1px 2px rgba(60,40,20,0.04), 0 4px 12px rgba(60,40,20,0.05);
+            --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            --editor-ease: cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        /* Hide all scrollbars */
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+
+        html, body {
+            font-family: 'Noto Serif SC', 'Songti SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .app {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            position: relative;
+        }
+
+        .app::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                transparent 31px,
+                rgba(140, 110, 70, 0.06) 31px,
+                rgba(140, 110, 70, 0.06) 32px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .header {
+            padding-top: calc(var(--safe-area-top) + 8px);
+            height: 62px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding-left: 16px;
+            padding-right: 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg);
+            position: relative;
+            z-index: 10;
+        }
+
+        .header-brand {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 28px;
+            font-weight: 400;
+            color: var(--text);
+            white-space: nowrap;
+            letter-spacing: 4px;
+        }
+
+        .header-icon {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background 300ms var(--ease);
+            background: var(--card);
+            border: 1px solid rgba(60,40,20,0.1);
+        }
+
+        .header-icon:active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .header-icon svg {
+            width: 22px;
+            height: 22px;
+            color: var(--text);
+        }
+
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .header-icon.search-icon {
+            margin-left: auto;
+        }
+
+        .mail-badge {
+            position: absolute;
+            top: -2px;
+            right: -4px;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5px;
+            display: none;
+        }
+
+        .mail-badge.show { display: flex; }
+
+        .header-tag-dropdown {
+            position: relative;
+            margin-left: 8px;
+        }
+
+        .header-tag-dropdown-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            font-size: 14px;
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 10px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            transition: all 0.2s var(--ease);
+            white-space: nowrap;
+        }
+
+        .header-tag-dropdown-btn:active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .header-tag-dropdown-btn svg {
+            width: 12px;
+            height: 12px;
+            color: var(--text-muted);
+        }
+
+        .header-tag-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            min-width: 120px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-card), 0 8px 32px rgba(60,40,20,0.12);
+            z-index: 300;
+            opacity: 0;
+            transform: translateY(-8px) scale(0.96);
+            pointer-events: none;
+            transition: all 0.25s var(--spring);
+        }
+
+        .header-tag-dropdown-menu::-webkit-scrollbar { width: 3px; }
+        .header-tag-dropdown-menu::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .header-tag-dropdown-menu.open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        .header-tag-dropdown-item {
+            padding: 8px 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+            background: var(--card);
+        }
+
+        .header-tag-dropdown-item:active {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        .header-tag-dropdown-item.header-tag-manage {
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 4px;
+            padding-top: 10px;
+        }
+
+        /* ===== Drawer (V6 sidebar) ===== */
+        .sidebar-overlay, .drawer-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(60,40,20,0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 400ms var(--ease);
+            z-index: 200;
+        }
+
+        .sidebar-overlay.open, .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sidebar, .drawer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 78%;
+            max-width: 360px;
+            height: 100%;
+            background: #faf6ec;
+            border-right: 1px solid rgba(60,40,20,0.1);
+            transform: translateX(-100%);
+            transition: transform 450ms var(--ease);
+            z-index: 201;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 8px 0 24px rgba(60,40,20,0.1);
+            padding-top: 0;
+        }
+
+        .sidebar.open, .drawer.open {
+            transform: translateX(0);
+        }
+
+        .drawer-brand {
+            padding: calc(24px + var(--safe-area-top)) 24px 20px;
+            border-bottom: 1px solid rgba(60,40,20,0.1);
+        }
+
+        .drawer-title {
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 36px;
+            color: var(--text);
+            line-height: 1;
+            letter-spacing: 6px;
+            margin-bottom: 6px;
+        }
+        .drawer-title .accent { color: var(--accent); }
+
+        .drawer-sub {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic;
+            font-size: 12px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        .drawer-section {
+            padding: 20px 16px 4px;
+        }
+
+        .drawer-section-label {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            padding: 0 14px 10px;
+        }
+
+        .drawer-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 300ms var(--ease);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            background: none;
+            border: none;
+            width: 100%;
+            text-align: left;
+            font-family: 'Noto Serif SC', serif;
+            position: relative;
+        }
+        .drawer-item:active { background: var(--card); color: var(--text); }
+        .drawer-item.active {
+            background: var(--card);
+            color: var(--accent);
+        }
+        .drawer-item.active::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            width: 3px;
+            height: 22px;
+            background: var(--accent);
+            border-radius: 0 2px 2px 0;
+        }
+        .drawer-item svg { width: 18px; height: 18px; stroke-width: 1.5; flex-shrink: 0; }
+        .drawer-item-label { flex: 1; }
+        .drawer-item-count {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            background: var(--bg);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .drawer-item.active .drawer-item-count {
+            background: var(--accent);
+            color: var(--bg);
+        }
+
+        .drawer-footer {
+            margin-top: auto;
+            padding: 16px 24px calc(20px + var(--safe-area-bottom));
+            border-top: 1px solid rgba(60,40,20,0.1);
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        /* ===== Heatmap (shared: sidebar legacy + me page) ===== */
+        .heatmap-cell, .sidebar-heatmap-cell {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            background: rgba(60,40,20,0.06);
+            transition: transform 0.15s ease;
+        }
+        .heatmap-cell.has-notes, .sidebar-heatmap-cell.has-notes { cursor: pointer; }
+        .heatmap-cell.has-notes:hover, .sidebar-heatmap-cell.has-notes:hover { transform: scale(1.2); }
+        .heatmap-cell.l1, .sidebar-heatmap-cell.l1 { background: rgba(168, 90, 42, 0.18); }
+        .heatmap-cell.l2, .sidebar-heatmap-cell.l2 { background: rgba(168, 90, 42, 0.35); }
+        .heatmap-cell.l3, .sidebar-heatmap-cell.l3 { background: rgba(168, 90, 42, 0.55); }
+        .heatmap-cell.l4, .sidebar-heatmap-cell.l4 { background: var(--accent); }
+        .heatmap-cell.today, .sidebar-heatmap-cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
+
+        .heatmap-legend-cell {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background: rgba(60,40,20,0.06);
+        }
+        .heatmap-legend-cell.l1 { background: rgba(168, 90, 42, 0.18); }
+        .heatmap-legend-cell.l2 { background: rgba(168, 90, 42, 0.35); }
+        .heatmap-legend-cell.l3 { background: rgba(168, 90, 42, 0.55); }
+        .heatmap-legend-cell.l4 { background: var(--accent); }
+
+        .dev-hint {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 16px;
+            font-size: 12px;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .dev-hint.show { opacity: 1; }
+
+        /* ===== Me Page (我的) ===== */
+        .me-header {
+            text-align: center;
+            padding: 24px 0 20px;
+        }
+
+        .me-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: var(--card);
+            border: 2px solid var(--accent);
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 32px;
+            color: var(--accent);
+            box-shadow: 0 4px 16px var(--accent-glow);
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+        }
+        .me-avatar:active { transform: scale(0.95); }
+
+        .me-name {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            letter-spacing: 2px;
+            margin-bottom: 2px;
+            outline: none;
+            border-radius: 4px;
+            padding: 2px 8px;
+            transition: background 0.2s;
+        }
+        .me-name:focus { background: var(--card); }
+
+        .me-sub {
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 20px;
+            color: var(--text-muted);
+            letter-spacing: 3px;
+            outline: none;
+            border-radius: 4px;
+            padding: 2px 12px;
+            transition: background 0.2s;
+        }
+        .me-sub:focus { background: var(--card); }
+
+        .me-stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            padding: 0 20px;
+            margin-bottom: 24px;
+        }
+
+        .me-stat-card {
+            background: var(--card);
+            border: 1px solid rgba(60,40,20,0.08);
+            border-radius: var(--radius);
+            padding: 16px 12px;
+            text-align: center;
+            box-shadow: var(--shadow-card);
+        }
+
+        .me-stat-value {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+        }
+
+        .me-stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ===== Explore Page ===== */
+        .explore-page-header {
+            text-align: center;
+            padding: 24px 20px 20px;
+        }
+        .explore-page-title {
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 36px;
+            color: var(--text);
+            letter-spacing: 6px;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+        .explore-page-sub {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic;
+            font-size: 12px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+        .explore-page-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 0 20px;
+        }
+        .explore-card {
+            background: var(--card);
+            border: 1px solid rgba(60,40,20,0.08);
+            border-radius: var(--radius);
+            padding: 20px 16px;
+            cursor: pointer;
+            text-align: center;
+            box-shadow: var(--shadow-card);
+            transition: all 0.3s var(--ease);
+        }
+        .explore-card:active { transform: scale(0.97); border-color: var(--accent); }
+        .explore-card-icon {
+            width: 44px; height: 44px;
+            margin: 0 auto 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--accent);
+        }
+        .explore-card-icon svg { width: 24px; height: 24px; stroke-width: 1.5; }
+        .explore-card-label {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .explore-card-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        /* ===== Insight Hub Page ===== */
+        .insight-hub-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 0 16px; padding-top: calc(var(--safe-area-top) + 8px);
+            padding-bottom: 8px; border-bottom: 1px solid var(--border);
+            background: var(--bg); flex-shrink: 0;
+        }
+        .insight-hub-back {
+            width: 38px; height: 38px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; border-radius: 10px;
+            background: var(--card); border: 1px solid var(--border);
+        }
+        .insight-hub-back:active { border-color: var(--accent); }
+        .insight-hub-back svg { width: 20px; height: 20px; color: var(--text); }
+        .insight-hub-title {
+            font-size: 17px; font-weight: 600; color: var(--text);
+        }
+        .insight-hub-actions {
+            margin-left: auto; display: flex; gap: 8px;
+        }
+        .insight-hub-btn {
+            font-size: 12px; padding: 6px 12px; border-radius: 8px;
+            cursor: pointer; font-family: 'Noto Sans SC', sans-serif;
+            border: 1px solid var(--border); background: var(--card);
+            color: var(--text-muted); transition: all 0.2s var(--ease);
+        }
+        .insight-hub-btn:active { border-color: var(--accent); color: var(--accent); }
+        .insight-hub-btn.primary {
+            background: var(--accent-light); border-color: var(--accent);
+            color: var(--accent); font-weight: 600;
+        }
+        .insight-hub-grid {
+            flex: 1; overflow-y: auto; padding: 12px 16px;
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+            padding-bottom: calc(var(--safe-area-bottom) + 80px);
+        }
+        .insight-hub-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 16px 14px;
+            cursor: pointer; text-align: center;
+            box-shadow: var(--shadow-card);
+            transition: all 0.2s var(--ease);
+        }
+        .insight-hub-card:active { transform: scale(0.97); border-color: var(--accent); }
+        .insight-hub-card-name {
+            font-size: 15px; font-weight: 600; color: var(--text);
+            font-family: 'Noto Serif SC', serif; margin-bottom: 6px;
+        }
+        .insight-hub-card-desc {
+            font-size: 11px; color: var(--text-muted);
+            font-family: 'Noto Sans SC', sans-serif; line-height: 1.4;
+        }
+
+        /* ── Insight Hub: History List ── */
+        .insight-hub-list {
+            flex: 1; overflow-y: auto; padding: 12px 16px;
+            padding-bottom: calc(var(--safe-area-bottom) + 80px);
+        }
+        .insight-hub-history-item {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 14px; margin-bottom: 8px;
+            cursor: pointer; box-shadow: var(--shadow-card);
+            transition: all 0.2s var(--ease);
+        }
+        .insight-hub-history-item:active { transform: scale(0.98); }
+        .insight-hub-history-meta {
+            display: flex; justify-content: space-between; align-items: baseline;
+            margin-bottom: 6px;
+        }
+        .insight-hub-history-name {
+            font-size: 14px; font-weight: 600; color: var(--text);
+            font-family: 'Noto Serif SC', serif;
+        }
+        .insight-hub-history-date {
+            font-size: 11px; color: var(--text-muted);
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        .insight-hub-history-preview {
+            font-size: 12px; color: var(--text-secondary);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        /* ===== Heatmap (V6 style, populated by app.js) ===== */
+        .heatmap {
+            background: var(--card);
+            border: 1px solid rgba(60,40,20,0.08);
+            border-radius: var(--radius);
+            padding: 18px 16px 14px;
+            margin: 0 20px 24px;
+            box-shadow: var(--shadow-card);
+        }
+
+        .heatmap-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 10px;
+        }
+
+        .heatmap-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            letter-spacing: 1px;
+        }
+
+        .heatmap-title .accent { color: var(--accent); }
+
+        .heatmap-summary {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+        }
+
+        .heatmap-body {
+            display: flex;
+            gap: 4px;
+        }
+
+        .heatmap-days {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding-top: 0;
+        }
+
+        .heatmap-day-label {
+            height: 10px;
+            font-size: 9px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+        }
+
+        .heatmap-grid-wrap {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .heatmap-grid, .sidebar-heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 2px;
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+            margin-top: 12px;
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+
+        .search-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg);
+            z-index: 150;
+            transform: translateY(-100%);
+            transition: transform 0.3s var(--ease);
+            display: flex;
+            align-items: center;
+            padding: 9px 13px;
+            padding-top: calc(var(--safe-area-top) + 12px);
+            gap: 9px;
+        }
+
+        .search-container.open {
+            transform: translateY(0);
+        }
+
+        .search-input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0 12px;
+            height: 40px;
+        }
+
+        .search-icon-prefix {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            color: var(--text);
+            outline: none;
+            padding: 0 8px;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-clear {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .search-clear.show {
+            opacity: 1;
+        }
+
+        .search-clear svg {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+        }
+
+        .search-cancel {
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .content {
+            height: calc(100% - (var(--safe-area-top) + 62px));
+            overflow-y: auto;
+            padding: 0 16px 100px;
+        }
+
+        .content::-webkit-scrollbar { display: none; }
+
+        /* ===== Notes Editorial Header (V6) ===== */
+        .notes-year-bar {
+            text-align: center;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.2em;
+            font-weight: 600;
+            padding: 4px 20px 8px;
+        }
+        .notes-year-bar .yr {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic;
+            font-size: 13px;
+            letter-spacing: 2px;
+        }
+
+        .notes-editorial-header {
+            text-align: center;
+            padding: 0 20px;
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            position: relative;
+            z-index: 10;
+            transition: max-height 0.4s var(--ease), opacity 0.3s var(--ease), padding 0.4s var(--ease);
+        }
+        .notes-editorial-header.revealed {
+            max-height: 500px;
+            opacity: 1;
+            padding: 16px 20px 24px;
+            overflow: visible;
+        }
+        .notes-header-eyebrow {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .notes-header-title {
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 38px;
+            color: var(--text);
+            letter-spacing: 6px;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+        .notes-header-meta {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic;
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        .page {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .page.active {
+            display: flex;
+        }
+
+        /* ===== V6 Magazine Note Sections ===== */
+        .notes-section { margin-bottom: 36px; }
+        .notes-section-header {
+            display: flex; align-items: baseline; gap: 10px;
+            padding: 12px 0 14px; margin-bottom: 16px;
+            border-bottom: 1px solid rgba(60,40,20,0.12);
+            position: sticky;
+            top: 0;
+            z-index: 4;
+            background: var(--bg);
+        }
+        .notes-section-month {
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 30px; color: var(--accent);
+            letter-spacing: 4px; line-height: 1;
+        }
+        .notes-section-en {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic; font-size: 14px;
+            color: var(--text-muted); letter-spacing: 2px;
+        }
+        .notes-section-count {
+            margin-left: auto; font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px; color: var(--text-muted); font-weight: 600;
+            letter-spacing: 0.1em; background: var(--card);
+            padding: 4px 10px; border-radius: 12px;
+            border: 1px solid rgba(60,40,20,0.1);
+        }
+        .notes-flow {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 12px;
+            align-items: stretch;
+        }
+        .notes-flow .note-card-wrapper { }
+
+        /* Year divider */
+        .notes-year-divider {
+            text-align: center;
+            padding: 24px 0 4px;
+        }
+        .notes-year-divider:first-child { padding-top: 0; }
+        .notes-year-label {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-style: italic;
+            font-size: 16px;
+            color: var(--text-muted);
+            letter-spacing: 3px;
+        }
+
+        .notes-section.collapsed { margin-bottom: 16px; }
+        .notes-section.collapsed .notes-section-header {
+            cursor: pointer; border-bottom: 1px dashed rgba(60,40,20,0.2); margin-bottom: 0;
+        }
+        .notes-section.collapsed .notes-section-month { color: var(--text-secondary); }
+        .notes-section.collapsed .notes-flow { display: none; }
+
+        .notes-section-more {
+            display: block; width: 100%; margin-top: 14px; padding: 12px;
+            background: transparent; border: 1px dashed rgba(60,40,20,0.2);
+            border-radius: 12px; color: var(--text-secondary);
+            font-family: 'Noto Serif SC', serif; font-size: 13px;
+            cursor: pointer; text-align: center;
+        }
+        .notes-section-more:active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+        /* Card sizes — 24-col grid ratio variants */
+        .note-card-wrapper.size-full,
+        .note-card-wrapper.featured { grid-column: span 24; }
+        .note-card-wrapper.size-17w { grid-column: span 17; }
+        .note-card-wrapper.size-7n { grid-column: span 7; }
+        .note-card-wrapper.size-16w { grid-column: span 16; }
+        .note-card-wrapper.size-8n { grid-column: span 8; }
+        .note-card-wrapper.size-14w { grid-column: span 14; }
+        .note-card-wrapper.size-10n { grid-column: span 10; }
+        .note-card-wrapper.size-13w { grid-column: span 13; }
+        .note-card-wrapper.size-11n { grid-column: span 11; }
+        .note-card-wrapper.size-12w { grid-column: span 12; }
+        .note-card-wrapper.size-12n { grid-column: span 12; }
+        .note-card-wrapper.size-11w { grid-column: span 11; }
+        .note-card-wrapper.size-13n { grid-column: span 13; }
+        .note-card-wrapper.size-10w { grid-column: span 10; }
+        .note-card-wrapper.size-14n { grid-column: span 14; }
+        .note-card-wrapper.size-8w { grid-column: span 8; }
+        .note-card-wrapper.size-16n { grid-column: span 16; }
+
+        /* Cards fill their grid cell height → equal height per row */
+        .note-card-wrapper .note-card { height: 100%; display: flex; flex-direction: column; }
+
+        .note-card-wrapper.featured .note-card {
+            display: grid; grid-template-columns: 100px 1fr; gap: 20px;
+            background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+            border: 1px solid var(--accent-light); padding: 20px;
+        }
+        .note-card-wrapper.featured .note-meta { display: none; }
+        .note-card-wrapper.featured .note-card::before {
+            content: attr(data-day);
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-size: 56px; font-weight: 600; color: var(--accent);
+            line-height: 0.9; letter-spacing: -2px;
+        }
+        .note-card-wrapper.featured .note-text {
+            font-size: 15px; line-height: 1.7; -webkit-line-clamp: 4;
+        }
+
+        .note-card-wrapper.size-2 .note-card { padding: 14px; }
+        .note-card-wrapper.size-2 .note-date { font-size: 9px; }
+        .note-card-wrapper.size-2 .note-text { font-size: 13px; }
+
+        .note-card-wrapper.size-1 .note-card { padding: 10px 12px; }
+        .note-card-wrapper.size-1 .note-meta { margin-bottom: 4px; }
+        .note-card-wrapper.size-1 .note-date { font-size: 9px; }
+        .note-card-wrapper.size-1 .note-text { font-size: 12px; line-height: 1.4; -webkit-line-clamp: 2; }
+
+        .note-card-wrapper {
+            position: relative;
+            /* NO transition on transform — it creates stacking context, trapping menus */
+            /* 去掉 content-visibility: auto —— 它在 Chromium 里会创建堆叠上下文，
+               导致后续 wrapper 覆盖前面 wrapper 溢出的菜单。
+               性能优化是次要的，正确性优先。 */
+        }
+
+        .note-card-wrapper:first-child {
+            margin-top: 0;
+        }
+
+        .note-card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 400ms var(--ease);
+            border: 1px solid rgba(60,40,20,0.08);
+            box-shadow: var(--shadow-card);
+            animation: noteIn 600ms var(--ease) both;
+        }
+
+        @keyframes noteIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .note-card:active {
+            transform: scale(0.99);
+        }
+
+        /* First card = featured */
+        .note-card-wrapper:first-child .note-card {
+            background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+            border: 1px solid var(--accent-light);
+            padding: 20px;
+        }
+
+        .note-card-wrapper:first-child .note-date {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-size: 40px;
+            font-weight: 600;
+            color: var(--accent);
+            line-height: 0.9;
+            letter-spacing: -2px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .note-card-wrapper:first-child .note-meta::after {
+            content: attr(data-month);
+            display: block;
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+        }
+
+        .note-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .note-date {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 600;
+            letter-spacing: 0.1em;
+        }
+
+        .note-text {
+            font-size: 14px;
+            color: var(--text);
+            line-height: 1.7;
+            font-family: 'Noto Serif SC', serif;
+            letter-spacing: 0.02em;
+        }
+
+        .note-text .tag-inline {
+            display: inline-block;
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            background: var(--accent-light);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin: 1px 2px;
+            font-family: 'Noto Sans SC', sans-serif;
+            text-decoration: none;
+        }
+            font-weight: 500;
+        }
+
+        .note-images {
+            overflow: hidden;
+        }
+
+        .image-missing {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: calc(33.33% - 3px);
+            aspect-ratio: 1 / 1;
+            margin: 2px 1px;
+            background: #f3f4f6;
+            border: 1px dashed #d1d5db;
+            border-radius: 6px;
+            color: #9ca3af;
+            cursor: pointer;
+            vertical-align: top;
+        }
+        .image-missing-icon { font-size: 24px; line-height: 1; }
+        .image-missing-text { font-size: 10px; margin-top: 4px; }
+
+        .note-images img {
+            display: inline-block;
+            width: calc(33.33% - 3px);
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            margin: 2px 1px;
+            border-radius: 6px;
+            vertical-align: top;
+        }
+
+        .note-text ul, .note-text ol {
+            padding-left: 20px;
+            margin: 6px 0;
+        }
+
+        .note-text li {
+            margin: 2px 0;
+        }
+
+        .note-text-collapsed {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .note-menu-btn {
+            position: absolute;
+            top: 12px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background 0.2s var(--ease);
+        }
+
+        .note-menu-btn:active {
+            background: var(--border);
+        }
+
+        .note-menu-btn svg {
+            width: 18px;
+            height: 18px;
+            color: var(--text-muted);
+        }
+
+        .note-menu {
+            display: none;   /* 默认隐藏，open 时显示 */
+        }
+
+        .note-menu.open {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            top: 44px;
+            right: 8px;
+            margin: 0;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            box-shadow: 0 8px 32px rgba(60,40,20,0.15);
+            min-width: 180px;
+            max-width: none;
+            max-height: none;
+            overflow: hidden;
+            color: inherit;
+            z-index: 2147483647;
+        }
+
+        .note-menu.open {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .note-menu-section {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .note-menu-section:not(:last-child) {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .note-menu-section-wide {
+            display: flex;
+        }
+
+        .note-menu-section-wide .note-menu-item {
+            flex: 1;
+        }
+
+        .note-menu-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 8px;
+            font-size: 11px;
+            color: var(--text);
+            cursor: pointer;
+            transition: background 0.2s var(--ease);
+            text-align: center;
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        .note-menu-item:active {
+            background: var(--accent-light);
+        }
+
+        .note-menu-item svg {
+            width: 16px;
+            height: 16px;
+            color: var(--text-secondary);
+        }
+
+        .note-menu-item span {
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        .note-menu-item-horizontal {
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            padding: 12px 14px;
+        }
+
+        .note-menu-item-horizontal span {
+            font-size: 13px;
+        }
+
+        .note-menu-item.danger {
+            color: #c0392b;
+        }
+
+        .note-menu-item.danger svg {
+            color: #c0392b;
+        }
+
+        .note-menu-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+
+        .note-menu-meta {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 12px 8px;
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        .empty-hint {
+            text-align: center;
+            padding: 57px 17px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .nian-chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg);
+        }
+
+        .nian-chat-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .think-block {
+            background: var(--accent-light);
+            border-radius: 12px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .think-toggle {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .think-toggle svg {
+            transition: transform 0.2s var(--ease);
+        }
+
+        .think-toggle.open svg {
+            transform: rotate(90deg);
+        }
+
+        .think-content {
+            display: none;
+            padding: 0 12px 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .think-content.open {
+            display: block;
+        }
+
+        .confirm-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 2000;     /* 高于 note-menu-open 的 1000，避免被穿透 */
+            display: none;
+            animation: fadeIn 0.2s var(--ease);
+        }
+
+        .confirm-overlay.open {
+            display: block;
+        }
+
+        .confirm-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--card);
+            border-radius: var(--radius);
+            z-index: 2010;     /* 比 overlay 再高一档 */
+            display: none;
+            width: 280px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            animation: confirmIn 0.25s var(--ease);
+        }
+
+        .confirm-dialog.open {
+            display: block;
+        }
+
+        .confirm-text {
+            padding: 24px 24px 8px;
+            font-size: 15px;
+            color: var(--text);
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        .confirm-actions {
+            display: flex;
+            padding: 16px 24px 20px;
+            gap: 10px;
+        }
+
+        .confirm-btn {
+            flex: 1;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .confirm-btn:active {
+            opacity: 0.8;
+        }
+
+        .confirm-cancel {
+            background: var(--accent-light);
+            color: var(--text);
+        }
+
+        .confirm-ok {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes confirmIn {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .nian-chat-messages {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .nian-message {
+            display: flex;
+            gap: 6px;
+            max-width: 100%;
+        }
+
+        .nian-message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+            max-width: 85%;
+        }
+
+        .nian-message.assistant {
+            align-self: flex-start;
+            max-width: 100%;
+        }
+
+        .nian-message-text {
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.65;
+            word-wrap: break-word;
+            font-family: 'Noto Serif SC', serif;
+            letter-spacing: 0.02em;
+            width: 100%;
+        }
+        .nian-message.user .nian-message-text { width: auto; }
+
+        /* Markdown formatting in chat */
+        .nian-message-text pre {
+            background: rgba(60,40,20,0.06);
+            border-radius: 8px;
+            padding: 12px 14px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 8px 0;
+            white-space: pre-wrap;
+            font-family: 'Noto Sans SC', monospace;
+        }
+        .nian-message-text code {
+            background: rgba(60,40,20,0.06);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            font-family: 'Noto Sans SC', monospace;
+        }
+        .nian-message-text pre code {
+            background: none;
+            padding: 0;
+        }
+        .nian-message-text ul, .nian-message-text ol {
+            padding-left: 20px;
+            margin: 6px 0;
+        }
+        .nian-message-text li { margin: 3px 0; }
+        .nian-message-text blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+            margin: 8px 0;
+            color: var(--text-secondary);
+        }
+        .nian-message-text h1, .nian-message-text h2, .nian-message-text h3 {
+            font-weight: 600;
+            margin: 10px 0 6px;
+            line-height: 1.3;
+        }
+        .nian-message-text h1 { font-size: 1.3em; }
+        .nian-message-text h2 { font-size: 1.15em; }
+        .nian-message-text h3 { font-size: 1.05em; }
+        .nian-message-text strong { font-weight: 600; }
+        .nian-message-text em { font-style: italic; }
+        .nian-message-text hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 12px 0;
+        }
+
+        .nian-message.assistant .nian-message-text {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid rgba(60,40,20,0.08);
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(60,40,20,0.04);
+        }
+
+        .nian-message.user .nian-message-text {
+            background: var(--text);
+            color: var(--bg);
+            border-bottom-right-radius: 4px;
+        }
+
+        .nian-message-typing .nian-message-text {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+        }
+
+        .nian-message-typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: typing 1.4s infinite;
+        }
+
+        .nian-message-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .nian-message-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-4px); opacity: 1; }
+        }
+
+        .nian-chat-input-container {
+            padding: 12px 16px 14px;
+            margin-bottom: max(0px, calc(var(--keyboard-height, 0px) - var(--safe-area-bottom, 0px) - 52px));
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+        }
+
+        .nian-chat-options {
+            display: flex;
+            gap: 8px;
+            padding-bottom: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .nian-chat-option {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 7px 10px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+            white-space: nowrap;
+        }
+        .nian-chat-option:active {
+            background: var(--accent-light);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+        .nian-chat-option svg { flex-shrink: 0; }
+
+        /* 引用预览条 */
+        .nian-ref-preview {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: var(--accent-light);
+            border: 1px solid var(--accent);
+            border-radius: 10px;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .nian-ref-preview-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .nian-ref-preview-close {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .nian-ref-preview-close:active { color: var(--text); }
+
+        /* 对话历史面板 */
+        .history-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 900;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s var(--ease);
+        }
+        .history-overlay.open { opacity: 1; pointer-events: auto; }
+        .history-panel {
+            position: fixed; top: 0; right: 0; width: 300px; max-width: 80vw;
+            height: 100vh; background: var(--card);
+            z-index: 901;
+            transform: translateX(100%);
+            transition: transform 0.25s var(--ease);
+            display: flex; flex-direction: column;
+            padding-top: var(--safe-area-top);
+        }
+        .history-panel.open { transform: translateX(0); }
+        .history-panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px; border-bottom: 1px solid var(--border);
+        }
+        .history-panel-title { font-size: 17px; font-weight: 600; color: var(--text); }
+        .history-panel-close { cursor: pointer; color: var(--text-muted); font-size: 18px; }
+        .history-panel-list {
+            flex: 1; overflow-y: auto; padding: 8px 0;
+        }
+        .history-panel-item {
+            padding: 12px 16px; cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s var(--ease);
+        }
+        .history-panel-item:active { background: var(--accent-light); }
+        .history-panel-item.active { background: var(--accent-light); border-left: 3px solid var(--accent); }
+        .history-panel-item-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+        .history-panel-item-meta { font-size: 11px; color: var(--text-muted); }
+        .history-panel-footer {
+            padding: 12px 16px; border-top: 1px solid var(--border);
+        }
+        .history-panel-new {
+            padding: 10px; text-align: center;
+            background: var(--accent); color: #fff; border-radius: 10px;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+        }
+        .history-panel-new:active { opacity: 0.8; }
+
+        /* 洞察模式配色 */
+        .insight-mode .nian-chat-input-container { border-top-color: #7c5cbf; }
+        .insight-mode .nian-chat-input:focus { border-color: #7c5cbf; }
+        .insight-mode .nian-chat-send { background: #7c5cbf; }
+        .insight-mode .nian-chat-options { display: none; }
+        .insight-mode .nian-ref-preview { display: none !important; }
+
+        /* ─── Onboarding ─── */
+        .nian-onboarding {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 200;
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: linear-gradient(145deg, #f5f0e6 0%, #ede4d5 50%, #f0e8d8 100%);
+            overflow: hidden;
+        }
+        .onb-slide {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transform: scale(0.92);
+            transition: none;
+            pointer-events: none;
+        }
+        .onb-slide.visible {
+            opacity: 1; transform: scale(1);
+            transition: all 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+            pointer-events: auto;
+        }
+        .onb-slide.exit {
+            opacity: 0; transform: scale(1.04);
+            transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+            pointer-events: none;
+        }
+        .onb-card {
+            width: 300px; max-width: 78vw;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 44px 32px 40px;
+            min-height: 260px;
+            display: flex; flex-direction: column;
+            justify-content: center;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .onb-card:active { transform: scale(0.97); }
+        .onb-card-content { text-align: left; padding: 0 4px; }
+        .onb-typewriter {
+            min-height: 180px;
+            font-size: 16px; font-weight: 400;
+            color: #1a1a1a; line-height: 1.9;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .onb-typewriter .tw-line {
+            opacity: 0;
+            transform: translateY(6px);
+            animation: twFadeIn 0.3s ease forwards;
+        }
+        .onb-typewriter .tw-space { height: 0.6em; }
+        .onb-typewriter .tw-title {
+            font-size: 24px; font-weight: 700;
+            line-height: 1.3; margin-bottom: 16px;
+            letter-spacing: -0.3px;
+        }
+        .onb-typewriter .tw-body {
+            font-size: 15px; color: #555;
+        }
+        @keyframes twFadeIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .tw-cursor {
+            display: inline-block;
+            width: 2px; height: 1em;
+            background: #888;
+            margin-left: 2px;
+            vertical-align: text-bottom;
+            animation: twBlink 0.8s step-end infinite;
+        }
+        .tw-cursor.done { animation: none; opacity: 0; }
+        @keyframes twBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .onb-spacer { height: 24px; }
+        .onb-shared {
+            width: 60px; height: 60px;
+            margin: 20px auto 0;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #e8e0f0, #d0d5f0);
+            opacity: 0.6;
+        }
+        .onb-start {
+            display: inline-block;
+            padding: 10px 36px;
+            background: #1a1a1a;
+            color: #fff;
+            border-radius: 22px;
+            font-size: 15px; font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .onb-start:active { transform: scale(0.95); }
+        .onb-dots {
+            position: absolute; bottom: 48px;
+            display: flex; gap: 8px;
+        }
+        .onb-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #ccc;
+            transition: all 0.3s;
+        }
+        .onb-dot.active { width: 20px; border-radius: 3px; background: #888; }
+
+        .nian-chat-input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .nian-chat-input {
+            flex: 1;
+            min-height: 44px;
+            max-height: calc(1.5em * 6 + 16px);
+            padding: 12px 16px;
+            font-size: 16px;
+            color: var(--text);
+            background: var(--card);
+            border: 1px solid rgba(60,40,20,0.1);
+            border-radius: 22px;
+            outline: none;
+            transition: border-color 0.2s var(--ease);
+            resize: none;
+            overflow-y: auto;
+            line-height: 1.5;
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        .nian-chat-input:focus {
+            border-color: var(--accent);
+        }
+
+        .nian-chat-input::placeholder {
+            color: var(--ink-faint);
+            font-style: italic;
+        }
+
+        .nian-chat-send {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+            box-shadow: 0 2px 6px var(--accent-glow);
+        }
+
+        .nian-chat-send:active {
+            transform: scale(0.9);
+        }
+
+        .nian-chat-send svg {
+            width: 18px;
+            height: 18px;
+            color: var(--bg);
+        }
+
+        .explore-panel {
+            position: absolute;
+            top: calc(var(--safe-area-top) + 56px);
+            left: 0;
+            right: 0;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            z-index: 100;
+            transform: translateY(-100%);
+            opacity: 0;
+            transition: all 0.3s var(--ease);
+            pointer-events: none;
+        }
+
+        .explore-panel.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .explore-actions {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .explore-actions::-webkit-scrollbar {
+            display: none;
+        }
+
+        .explore-action {
+            flex: 1;
+            min-width: 70px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+        }
+
+        .explore-action:active {
+            background: var(--accent-light);
+            border-color: var(--accent);
+        }
+
+        .explore-action svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+        }
+
+        .explore-action span {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .explore-panel-overlay {
+            position: absolute;
+            top: calc(var(--safe-area-top) + 56px);
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease);
+        }
+
+        .explore-panel-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* ===== Floating Island Nav (V6) ===== */
+        .bottom-nav {
+            position: absolute;
+            left: 50%;
+            bottom: calc(24px + var(--safe-area-bottom));
+            transform: translateX(-50%);
+            width: auto;
+            height: auto;
+            background: var(--text);
+            border-radius: 32px;
+            padding: 6px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            border-top: none;
+            box-shadow: 0 8px 24px rgba(60,40,20,0.3), 0 0 0 1px rgba(0,0,0,0.05);
+            z-index: 50;
+            padding-bottom: 6px;
+            box-sizing: content-box;
+        }
+
+        .nav-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            height: 50px;
+            min-width: 50px;
+            padding: 0;
+            cursor: pointer;
+            color: rgba(245, 240, 230, 0.5);
+            font-family: 'Noto Serif SC', serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            border-radius: 25px;
+            transition: min-width 420ms var(--spring), padding 420ms var(--spring), gap 420ms var(--spring), background 420ms var(--spring), color 300ms var(--ease);
+            white-space: nowrap;
+            overflow: hidden;
+            flex-shrink: 0;
+            position: relative;
+            flex-direction: row;
+        }
+
+        .nav-label.active {
+            background: var(--accent);
+            color: var(--bg);
+            min-width: 110px;
+            padding: 0 20px;
+            gap: 8px;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .nav-label svg {
+            width: 20px;
+            height: 20px;
+            stroke-width: 1.5;
+            flex-shrink: 0;
+        }
+
+        .nav-label span {
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: max-width 350ms var(--spring) 100ms, opacity 250ms var(--ease) 100ms;
+        }
+
+        .nav-label.active span {
+            max-width: 80px;
+            opacity: 1;
+        }
+
+        .ai-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            padding: 2px 5px;
+            font-size: 9px;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, var(--accent), #c77a3a);
+            border-radius: 4px;
+        }
+
+        /* ===== Note FAB (pen button, notes page only) ===== */
+        .note-fab {
+            position: absolute;
+            right: 20px;
+            bottom: calc(24px + var(--safe-area-bottom));
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(60,40,20,0.35);
+            cursor: pointer;
+            z-index: 45;
+            transition: opacity 0.3s var(--ease), transform 0.3s var(--spring);
+        }
+        .note-fab:active { transform: scale(0.9); }
+        .note-fab svg {
+            width: 24px;
+            height: 24px;
+            color: var(--bg);
+        }
+        /* Hide on non-notes pages */
+        .note-fab.hidden { opacity: 0; pointer-events: none; }
+
+        .editor {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            z-index: 300;
+            display: none;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.4s var(--editor-ease);
+            border-radius: 16px 16px 0 0;
+            height: 25vh;
+            max-height: 100vh;
+            overflow: hidden;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.15);
+        }
+
+        .editor.open {
+            display: flex;
+            transform: translateY(0);
+        }
+
+        .editor-handle {
+            width: 36px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 10px auto 0;
+            flex-shrink: 0;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px 10px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg);
+            flex-shrink: 0;
+        }
+
+        .editor-cancel {
+            font-size: 17px;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .editor-title {
+            font-size: 19px;
+            font-weight: 600;
+        }
+
+        .editor-save {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--accent);
+            cursor: pointer;
+        }
+
+        .editor-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            position: relative;
+        }
+
+        .editor-wrapper {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+        }
+
+        .editor-textarea {
+            flex: 1;
+            padding: 16px;
+            font-size: 16px;
+            line-height: 1.8;
+            color: var(--text);
+            caret-color: #3b82f6;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: 'Noto Serif SC', 'PingFang SC', serif;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .editor-textarea:empty::before {
+            content: attr(data-placeholder);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .editor-textarea b, .editor-textarea strong { font-weight: bold; }
+
+        .editor-textarea ul, .editor-textarea ol { padding-left: 24px; }
+
+        .editor-toolbar {
+            display: flex;
+            gap: 2px;
+            padding: 6px 10px;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .editor-toolbar-btn {
+            width: 34px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            border: none; background: transparent;
+            border-radius: 6px; cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 15px; font-weight: 500;
+            transition: all 0.15s var(--ease);
+        }
+
+        .editor-toolbar-btn:active {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        .editor-toolbar-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .editor-toolbar-btn.active svg {
+            color: #fff;
+        }
+
+        .editor-toolbar-btn svg {
+            width: 16px; height: 16px;
+            color: inherit;
+        }
+
+        .editor-toolbar-btn-img {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .editor-image-strip {
+            display: flex;
+            gap: 6px;
+            padding: 6px 12px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            flex-shrink: 0;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            min-height: 0;
+            align-items: center;
+            transition: min-height 0.2s var(--ease), padding 0.2s var(--ease);
+        }
+
+        .editor-image-strip:not(:empty) {
+            min-height: 60px;
+        }
+
+        .editor-image-strip:empty {
+            display: none;
+        }
+
+        .editor-image-strip::-webkit-scrollbar {
+            display: none;
+        }
+
+        .editor-image-thumb {
+            width: 52px; height: 52px;
+            border-radius: 6px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .editor-image-item {
+            position: relative;
+            flex-shrink: 0;
+            width: 52px; height: 52px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .editor-image-item img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+
+        .editor-image-del {
+            position: absolute;
+            top: 0; right: 0;
+            width: 18px; height: 18px;
+            background: rgba(0,0,0,0.55);
+            border: none; border-radius: 0 6px 0 6px;
+            color: #fff;
+            font-size: 12px;
+            line-height: 18px;
+            text-align: center;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .editor-image-del:active {
+            background: rgba(0,0,0,0.75);
+        }
+
+        .editor-toolbar-divider {
+            width: 1px;
+            background: var(--border);
+            margin: 2px 4px;
+        }
+
+        .tag-hint {
+            padding: 8px 16px;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .tag-hint code {
+            color: var(--accent);
+            background: var(--accent-light);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        .tag-suggestions {
+            position: absolute;
+            top: 100px;
+            left: 16px;
+            right: 16px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 400;
+            opacity: 0;
+            transform: translateY(-8px) scale(0.96);
+            pointer-events: none;
+            transition: all 0.25s var(--spring);
+        }
+
+        .tag-suggestions.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        .tag-suggestion-item {
+            padding: 12px 16px;
+            font-size: 16px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        .tag-suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .tag-suggestion-item:active {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        .tag-suggestion-item.new-tag {
+            color: var(--accent);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--text);
+            color: var(--bg);
+            padding: 7px 17px;
+            border-radius: 20px;
+            font-size: 11px;
+            z-index: 700;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s var(--ease);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease);
+            z-index: 15;
+        }
+
+        .backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .settings-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 250;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease);
+        }
+        .settings-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .settings {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            z-index: 350;
+            display: none;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.5s var(--editor-ease);
+            padding-top: var(--safe-area-top);
+            padding-bottom: var(--safe-area-bottom);
+            box-sizing: border-box;
+        }
+
+        .settings.open {
+            display: flex;
+            transform: translateY(0);
+        }
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg);
+            flex-shrink: 0;
+        }
+        .settings-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .settings-back {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.2s var(--ease);
+        }
+        .settings-back:active {
+            background: var(--border);
+        }
+        .settings-back svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text);
+        }
+        .settings-title {
+            font-size: 19px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .settings-content::-webkit-scrollbar {
+            display: none;
+        }
+        .settings-section {
+            margin-bottom: 24px;
+        }
+        .settings-section-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        .settings-group {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .settings-group-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .settings-group-item:last-child {
+            border-bottom: none;
+        }
+        .settings-label {
+            font-size: 17px;
+            color: var(--text);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .settings-desc {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .settings-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+            color: var(--text);
+            background: var(--bg);
+            outline: none;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .settings-input:focus {
+            border-color: var(--accent);
+        }
+        
+        .settings-menu-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            cursor: pointer;
+            transition: background 0.2s var(--ease);
+            border-bottom: 1px solid var(--border);
+        }
+        .settings-menu-item:last-child {
+            border-bottom: none;
+        }
+        .settings-menu-item:active {
+            background: var(--accent-light);
+        }
+        .settings-menu-item-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .settings-menu-item-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: var(--accent-light);
+            flex-shrink: 0;
+        }
+        .settings-menu-item-icon svg {
+            width: 16px;
+            height: 16px;
+            color: var(--accent);
+        }
+        .settings-menu-item-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .settings-menu-item-label {
+            font-size: 17px;
+            color: var(--text);
+            font-weight: 500;
+        }
+        .settings-menu-item-desc {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+        .settings-menu-item-arrow {
+            width: 16px;
+            height: 16px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .settings-sub {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+        .settings-sub.active {
+            display: flex;
+        }
+
+.settings-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+            color: var(--text);
+            background: var(--bg);
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .settings-select:focus {
+            border-color: var(--accent);
+        }
+        .settings-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 17px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+            font-family: inherit;
+        }
+        .settings-btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .settings-btn-primary:active {
+            opacity: 0.8;
+        }
+        .settings-btn-secondary {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+        .settings-btn-secondary:active {
+            opacity: 0.7;
+        }
+        .settings-status {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            text-align: center;
+        }
+        .settings-status.success {
+            color: #34a853;
+        }
+        .settings-status.error {
+            color: #ea4335;
+        }
+
+        .prompt-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .prompt-card + .prompt-card { margin-top: 8px; }
+
+        .prompt-card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 14px; cursor: pointer; user-select: none;
+        }
+        .prompt-card-header:active { background: var(--accent-light); }
+
+        .prompt-card-title {
+            font-size: 14px; font-weight: 600; color: var(--text);
+        }
+        .prompt-card-arrow {
+            width: 18px; height: 18px; transition: transform 0.2s var(--ease); color: var(--text-muted);
+        }
+        .prompt-card.open .prompt-card-arrow { transform: rotate(180deg); }
+
+        .prompt-card-body {
+            display: none;
+            padding: 0 14px 12px;
+        }
+        .prompt-card.open .prompt-card-body { display: block; }
+
+        .prompt-field {
+            margin-bottom: 8px;
+        }
+        .prompt-field-label {
+            font-size: 11px; color: var(--text-muted); margin-bottom: 3px;
+        }
+        .prompt-field-input {
+            width: 100%; font-size: 13px; font-family: inherit;
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 7px 10px; outline: none; color: var(--text);
+            background: var(--bg); resize: vertical; box-sizing: border-box;
+        }
+        .prompt-field-input:focus { border-color: var(--accent); }
+        .prompt-field-textarea {
+            min-height: 80px; line-height: 1.5;
+        }
+
+        .penpal-sheet-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 400;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease);
+        }
+        .penpal-sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+        .penpal-sheet {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            border-radius: var(--radius) var(--radius) 0 0;
+            z-index: 410;
+            transform: translateY(100%);
+            transition: transform 0.4s var(--editor-ease);
+            padding-bottom: calc(var(--safe-area-bottom) + 12px);
+        }
+        .penpal-sheet.open { transform: translateY(0); }
+        .penpal-sheet-handle {
+            width: 36px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 10px auto;
+        }
+        .penpal-sheet-title {
+            font-size: 17px; font-weight: 600;
+            color: var(--text);
+            text-align: center;
+            padding: 4px 0 12px;
+        }
+        .penpal-sheet-subtitle {
+            font-size: 13px; color: var(--text-muted);
+            text-align: center;
+            padding: 0 20px 16px;
+        }
+        .penpal-sheet-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 0 16px 16px;
+        }
+        .penpal-sheet-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s var(--ease);
+        }
+        .penpal-sheet-item:active { transform: scale(0.96); border-color: var(--accent); }
+        .penpal-sheet-item-disabled { opacity: 0.4; pointer-events: none; }
+        .penpal-sheet-avatar {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+        }
+        .penpal-sheet-name { font-size: 15px; font-weight: 600; color: var(--text); }
+        .penpal-sheet-personality { font-size: 12px; color: var(--text-muted); text-align: center; }
+
+        /* Note picker specific: full-width cards, 3-line clamp, 80vh, search */
+        #notePickerSheet {
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #notePickerSheet .penpal-sheet-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 0 16px 16px;
+        }
+        #notePickerSheet .penpal-sheet-item {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+            padding: 12px 14px;
+        }
+        #notePickerSheet .penpal-sheet-item .np-date {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: 'Noto Sans SC', sans-serif;
+            letter-spacing: 0.05em;
+        }
+        #notePickerSheet .penpal-sheet-item .np-text {
+            font-size: 14px;
+            color: var(--text);
+            font-family: 'Noto Serif SC', serif;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-all;
+        }
+        .note-picker-search {
+            margin: 0 16px 12px;
+            padding: 10px 14px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            color: var(--text);
+            outline: none;
+            font-family: 'Noto Serif SC', serif;
+        }
+        .note-picker-search:focus { border-color: var(--accent); }
+        .note-picker-search::placeholder { color: var(--ink-faint); }
+
+        .insight-sheet-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 420;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease);
+        }
+        .insight-sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+        .insight-sheet {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            border-radius: var(--radius) var(--radius) 0 0;
+            z-index: 430;
+            transform: translateY(100%);
+            transition: transform 0.4s var(--editor-ease);
+            padding-bottom: calc(var(--safe-area-bottom) + 12px);
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .insight-sheet.open { transform: translateY(0); }
+
+        .insight-sheet-handle {
+            width: 36px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 10px auto;
+        }
+
+        .insight-sheet-title {
+            font-size: 17px; font-weight: 600;
+            color: var(--text);
+            text-align: center;
+            padding: 4px 0 4px;
+        }
+
+        .insight-sheet-subtitle {
+            font-size: 13px; color: var(--text-muted);
+            text-align: center;
+            padding: 0 20px 14px;
+        }
+
+        .insight-method-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 0 16px 16px;
+        }
+
+        .insight-method-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: all 0.2s var(--ease);
+        }
+        .insight-method-item:active { transform: scale(0.96); border-color: var(--accent); }
+
+        .insight-method-name { font-size: 14px; font-weight: 600; color: var(--text); }
+        .insight-method-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
+        /* ─── 洞察选择器 (输入框上方) ─── */
+        .insight-picker {
+            margin: 0 16px 8px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            animation: insightPickerIn 0.25s var(--ease);
+        }
+        @keyframes insightPickerIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .insight-picker-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px 6px;
+            gap: 8px;
+        }
+        .insight-picker-back {
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; border-radius: 50%;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .insight-picker-back:active { background: var(--border); }
+        .insight-picker-title {
+            flex: 1;
+            font-size: 13px; font-weight: 600;
+            color: var(--text-muted);
+        }
+        .insight-picker-close {
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; border-radius: 50%;
+            font-size: 14px; color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .insight-picker-close:active { background: var(--border); }
+        .insight-picker-chips {
+            display: flex;
+            gap: 8px;
+            padding: 6px 14px 12px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .insight-picker-chips::-webkit-scrollbar { display: none; }
+        .insight-picker-chip {
+            flex-shrink: 0;
+            padding: 7px 15px;
+            border-radius: 18px;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            color: var(--text);
+            background: var(--bg);
+            transition: all 0.15s var(--ease);
+            white-space: nowrap;
+            font-family: 'Noto Serif SC', serif;
+        }
+        .insight-picker-chip:active { transform: scale(0.95); }
+        .insight-picker-chip.selected {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .insight-picker-chip.recommend {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .insight-picker-chip.more {
+            border-style: dashed;
+            color: var(--text-muted);
+        }
+        .insight-picker-chip.note-chip {
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 12px;
+            padding: 7px 12px;
+        }
+        .insight-picker-loading {
+            padding: 8px 14px 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .insight-picker-loading .dot-pulse {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: dotBounce 0.6s infinite alternate;
+        }
+        .insight-picker-loading .dot-pulse:nth-child(2) { animation-delay: 0.2s; }
+        .insight-picker-loading .dot-pulse:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBounce {
+            from { opacity: 0.3; transform: translateY(0); }
+            to { opacity: 1; transform: translateY(-3px); }
+        }
+
+        .mail-fly {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            z-index: 999;
+            pointer-events: none;
+            width: 80px;
+            height: 64px;
+            margin-left: -40px;
+            margin-top: -32px;
+            opacity: 0;
+            transform: scale(0.3);
+        }
+
+        .mail-fly.show {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 0.25s var(--spring), transform 0.35s var(--spring);
+        }
+
+        .mail-fly svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .mail-fly .flap-group {
+            transform-origin: 40px 28px;
+            transition: transform 0.35s var(--ease);
+        }
+
+        .mail-fly .flap-group.closed {
+            transform: rotateX(-160deg);
+        }
+
+        .editor-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 290;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease);
+        }
+        .editor-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .onboarding {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            z-index: 800;
+            display: none;
+            flex-direction: column;
+        }
+        .onboarding.open {
+            display: flex;
+        }
+
+        .onboarding-slides {
+            flex: 1;
+            display: flex;
+            min-height: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .onboarding-slides::-webkit-scrollbar { display: none; }
+
+        .onboarding-slide {
+            min-width: 100%;
+            width: 100%;
+            min-height: 100%;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 40px 40px;
+            box-sizing: border-box;
+            scroll-snap-align: start;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .onboarding-slide-icon {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 40px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .onboarding-slide-title {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 10px;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+
+        .onboarding-slide-keywords {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+
+        .onboarding-slide-keyword {
+            padding: 5px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .onboarding-slide-desc {
+            font-size: 14px;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.6;
+            max-width: 260px;
+        }
+
+        .onboarding-footer {
+            padding: 0 24px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .onboarding-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .onboarding-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border);
+            transition: all 0.3s var(--ease);
+        }
+
+        .onboarding-dot.active {
+            width: 20px;
+            background: var(--accent);
+        }
+
+        .onboarding-btn {
+            width: 100%;
+            height: 48px;
+            border-radius: 24px;
+            background: var(--text);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+            font-family: inherit;
+            letter-spacing: 0.3px;
+        }
+        .onboarding-btn:active {
+            transform: scale(0.97);
+            opacity: 0.9;
+        }
+
+        .onboarding-btn-secondary {
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 400;
+            height: 32px;
+            margin-top: -4px;
+        }
+        .onboarding-btn-secondary:active {
+            color: var(--text);
+        }
+
+        .onboarding-skip {
+            position: absolute;
+            top: calc(var(--safe-area-top) + 12px);
+            right: 16px;
+            font-size: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            z-index: 10;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s var(--ease);
+        }
+        .onboarding-skip:active {
+            background: var(--border);
+        }
+
+        .onboarding-1-bg {
+            background: linear-gradient(160deg, #fdf6ec 0%, #fef9f3 40%, #faf6f0 100%);
+        }
+
+        .onboarding-1-pen {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+        }
+
+        .onboarding-1-circle {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px dashed #c9a96e;
+            position: absolute;
+            animation: spin 12s linear infinite;
+        }
+
+        .onboarding-1-ink {
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, #4a3728 0%, #2c1f14 70%, transparent 100%);
+            border-radius: 4px 4px 8px 8px;
+            position: absolute;
+            bottom: 10px;
+            right: 14px;
+            transform: rotate(-30deg);
+        }
+
+        .onboarding-1-nib {
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 14px solid #4a3728;
+            position: absolute;
+            top: 4px;
+            right: 26px;
+            transform: rotate(-30deg);
+        }
+
+        .onboarding-1-text {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            font-size: 10px;
+            color: #8b7355;
+            font-weight: 500;
+            transform: rotate(-30deg);
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .onboarding-2-bg {
+            background: linear-gradient(160deg, #fff5f0 0%, #fff0eb 40%, #ffefe9 100%);
+        }
+
+        .onboarding-2-bubble-wrap {
+            position: relative;
+            width: 160px;
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .onboarding-2-core {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffd4b8 0%, #ffb088 50%, #ff9060 100%);
+            box-shadow: 0 0 30px rgba(255, 144, 96, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            position: relative;
+            z-index: 2;
+            animation: pulseGlow 3s ease-in-out infinite;
+        }
+
+        .onboarding-2-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255, 144, 96, 0.2);
+        }
+        .onboarding-2-ring:nth-child(1) {
+            width: 110px; height: 110px;
+            animation: ringExpand 3s ease-in-out infinite;
+        }
+        .onboarding-2-ring:nth-child(2) {
+            width: 150px; height: 150px;
+            animation: ringExpand 3s ease-in-out infinite 0.6s;
+        }
+
+        .onboarding-2-bubble {
+            position: absolute;
+            background: #fff;
+            border-radius: 12px;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            white-space: nowrap;
+            animation: floatBubble 4s ease-in-out infinite;
+        }
+        .onboarding-2-bubble:nth-child(3) {
+            top: -5px; left: -10px;
+            animation-delay: 0s;
+        }
+        .onboarding-2-bubble:nth-child(4) {
+            top: 10px; right: -20px;
+            animation-delay: 1.2s;
+        }
+        .onboarding-2-bubble:nth-child(5) {
+            bottom: 5px; left: -5px;
+            animation-delay: 2.4s;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 144, 96, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 144, 96, 0.5); }
+        }
+
+        @keyframes ringExpand {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.08); }
+        }
+
+        @keyframes floatBubble {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        .onboarding-3-bg {
+            background: linear-gradient(160deg, #f0f4ff 0%, #e8eeff 40%, #e4ebff 100%);
+        }
+
+        .onboarding-3-prism-wrap {
+            position: relative;
+            width: 140px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .onboarding-3-prism {
+            width: 0;
+            height: 0;
+            border-left: 50px solid transparent;
+            border-right: 50px solid transparent;
+            border-bottom: 86px solid #b8c9f0;
+            position: relative;
+            filter: drop-shadow(0 0 20px rgba(184, 201, 240, 0.5));
+        }
+
+        .onboarding-3-rays {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 160px;
+            height: 160px;
+            transform: translate(-50%, -50%);
+        }
+
+        .onboarding-3-ray {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 2px;
+            background: linear-gradient(to right, rgba(120, 150, 240, 0.6), transparent);
+            transform-origin: 0 50%;
+            border-radius: 1px;
+        }
+
+        .onboarding-3-star {
+            position: absolute;
+            background: #ffd700;
+            border-radius: 50%;
+            animation: twinkle var(--dur, 2s) ease-in-out infinite var(--delay, 0s);
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .onboarding-3-prism-glow {
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 20px;
+            background: radial-gradient(ellipse, rgba(120, 150, 240, 0.3), transparent 70%);
+            border-radius: 50%;
+            filter: blur(6px);
+        }
+
+        .onboarding-4-bg {
+            background: linear-gradient(160deg, #fef9f0 0%, #fef6e8 40%, #fdf2e0 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .onboarding-4-particles {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+
+        .onboarding-4-particle {
+            position: absolute;
+            width: var(--size, 4px);
+            height: var(--size, 4px);
+            border-radius: 50%;
+            background: var(--accent);
+            opacity: 0.15;
+            animation: floatParticle 6s ease-in-out infinite;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(8px, -12px) scale(1.1); }
+            66% { transform: translate(-5px, -6px) scale(0.9); }
+        }
+
+        .onboarding-4-brand {
+            font-size: 38px;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .onboarding-4-brand span {
+            color: var(--accent);
+        }
+
+        .onboarding-4-slogan {
+            font-size: 15px;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.6;
+            max-width: 240px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .onboarding-4-btn {
+            margin-top: 40px;
+            width: 200px;
+            height: 54px;
+            border-radius: 27px;
+            background: linear-gradient(135deg, var(--accent), #ff7b3d);
+            color: #fff;
+            font-size: 17px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(232, 93, 4, 0.3);
+            transition: all 0.25s var(--spring);
+            font-family: inherit;
+            letter-spacing: 0.5px;
+            position: relative;
+            z-index: 1;
+        }
+        .onboarding-4-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 4px 12px rgba(232, 93, 4, 0.25);
+        }
+
+        /* ===== Full-screen Note Expansion (V6) ===== */
+        .note-expand-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(42,36,24,0.6);
+            z-index: 600;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.4s var(--ease);
+        }
+        .note-expand-overlay.open { opacity: 1; pointer-events: auto; }
+
+        .note-expand-viewer {
+            position: fixed;
+            top: 4vh;
+            left: 3vw;
+            right: 3vw;
+            bottom: 4vh;
+            z-index: 601;
+            background: var(--bg);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 48px rgba(60,40,20,0.3);
+            transform: scale(0);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s var(--ease);
+        }
+        .note-expand-viewer.open {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .note-expand-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 2;
+            border-radius: 50%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            opacity: 0;
+            transition: opacity 0.3s var(--ease) 0.25s;
+        }
+        .note-expand-viewer.open .note-expand-close { opacity: 1; }
+
+        .note-expand-close svg { width: 16px; height: 16px; color: var(--text-secondary); }
+
+        .note-expand-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 48px 24px calc(var(--safe-area-bottom) + 32px);
+            opacity: 0;
+            transition: opacity 0.3s var(--ease) 0.3s;
+        }
+        .note-expand-viewer.open .note-expand-scroll { opacity: 1; }
+
+        .note-expand-date {
+            font-family: 'Playfair Display', 'Georgia', serif;
+            font-size: 14px;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .note-expand-body {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 18px;
+            line-height: 1.9;
+            color: var(--text);
+            letter-spacing: 0.02em;
+            white-space: pre-wrap;
+        }
+        .note-expand-body .tag-inline {
+            display: inline-block;
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 13px;
+            background: var(--accent-light);
+            padding: 2px 10px;
+            border-radius: 4px;
+            margin: 2px 3px;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        .note-expand-meta {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .image-preview-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 600;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            opacity: 0;
+            transition: opacity 0.3s var(--ease);
+        }
+
+        .image-preview-overlay.open {
+            display: flex;
+            opacity: 1;
+        }
+
+        .image-preview-close {
+            position: absolute;
+            top: max(20px, var(--safe-area-top, 20px));
+            right: 20px;
+            width: 40px; height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .image-preview-close:active {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .image-preview-close svg {
+            width: 24px; height: 24px;
+            color: #fff;
+        }
+
+        .image-preview-container {
+            max-width: 90vw;
+            max-height: 85vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-preview-container img {
+            max-width: 100%;
+            max-height: 85vh;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .image-preview-loading {
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+        <div class="editor-overlay" id="editorOverlay" onclick="closeEditor()"></div>
+
+        <div class="drawer" id="sidebar">
+            <div class="drawer-brand">
+                <div class="drawer-title">念念<span class="accent">.</span></div>
+                <div class="drawer-sub">A Quiet Journal · 静默手记</div>
+            </div>
+
+            <div class="drawer-section">
+                <div class="drawer-section-label">Workspace</div>
+                <button class="drawer-item active" id="drawerNotes" onclick="switchToNotes();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+                    <span class="drawer-item-label">笔记</span>
+                </button>
+                <button class="drawer-item" id="drawerNian" onclick="switchToNian();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                    <span class="drawer-item-label">念念</span>
+                </button>
+                <button class="drawer-item" id="drawerMail" onclick="openMailbox();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><polyline points="2 6 12 14 22 6"/></svg>
+                    <span class="drawer-item-label">邮件</span>
+                    <span class="drawer-item-count" id="mailUnreadBadge" style="display:none">0</span>
+                </button>
+                <button class="drawer-item" id="drawerMe" onclick="switchToMe();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span class="drawer-item-label">我的</span>
+                </button>
+            </div>
+
+            <div class="drawer-section">
+                <div class="drawer-section-label">Library</div>
+                <button class="drawer-item" id="drawerMemory" onclick="openMemory();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C9 2 7 4 7 6.5C7 8 8 9 9 10C7.5 10 6 11.5 6 13.5C6 16 8 18 9 18C9.5 18 10 17.5 10.5 17H13.5C14 17.5 14.5 18 15 18C16 18 18 16 18 13.5C18 11.5 16.5 10 15 10C16 9 17 8 17 6.5C17 4 15 2 12 2Z"/></svg>
+                    <span class="drawer-item-label">记忆</span>
+                </button>
+                <button class="drawer-item" id="drawerInsight" onclick="openInsight();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <span class="drawer-item-label">洞察</span>
+                </button>
+                <button class="drawer-item" id="drawerTags" onclick="switchToNotes();closeSidebar();setTimeout(function(){document.querySelector('.search-icon')&&document.querySelector('.search-icon').click()},300)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                    <span class="drawer-item-label">标签</span>
+                </button>
+            </div>
+
+            <div class="drawer-section">
+                <div class="drawer-section-label">System</div>
+                <button class="drawer-item" id="drawerSettings" onclick="openSettings();closeSidebar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>
+                    <span class="drawer-item-label">设置</span>
+                </button>
+            </div>
+
+            <div class="drawer-footer">
+                v0.1 · Nian Journal
+            </div>
+        </div>
+
+        <div class="header" id="appHeader">
+            <div class="header-icon" onclick="toggleSidebar()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </div>
+            <div class="header-icon" id="historyIcon" onclick="toggleHistoryPanel()" style="display:none">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+            <div class="header-right" id="headerRight" style="display:none">
+                <div class="header-icon" id="headerNewChat" onclick="newConversation()" title="新建对话">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </div>
+                <div class="header-icon" id="memoryIcon" onclick="openMemory()" title="记忆">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2C9 2 7 4 7 6.5C7 8 8 9 9 10C7.5 10 6 11.5 6 13.5C6 16 8 18 9 18C9.5 18 10 17.5 10.5 17H13.5C14 17.5 14.5 18 15 18C16 18 18 16 18 13.5C18 11.5 16.5 10 15 10C16 9 17 8 17 6.5C17 4 15 2 12 2Z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="explore-panel-overlay" id="exploreOverlay" onclick="closeExplore()"></div>
+        <div class="explore-panel" id="explorePanel">
+            <div class="explore-actions">
+                <div class="explore-action" onclick="openInsight()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                    <span>洞察</span>
+                </div>
+                <div class="explore-action" onclick="showToast('AI回顾开发中~')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    <span>AI回顾</span>
+                </div>
+                <div class="explore-action" onclick="showToast('念念日记开发中~')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <span>念念日记</span>
+                </div>
+                <div class="explore-action" onclick="showToast('更多功能开发中~')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="1"/>
+                        <circle cx="12" cy="5" r="1"/>
+                        <circle cx="12" cy="19" r="1"/>
+                    </svg>
+                    <span>更多</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content" id="appContent">
+            <div class="page active" id="notesPage">
+                <div class="notes-year-bar" id="notesYearBar">2026年 · JOURNAL</div>
+                <div class="notes-editorial-header" id="notesEditorialHeader">
+                    <div class="notes-header-eyebrow">All Notes · 共 <span id="headerNoteCount">0</span> 篇</div>
+                    <div class="notes-header-title">我的手记</div>
+                    <div class="notes-header-meta">— from the quiet hours, 2026 —</div>
+                </div>
+                <div id="notesList"></div>
+            </div>
+
+            <div class="page" id="nianPage">
+                <!-- Onboarding overlay -->
+                <div class="nian-onboarding" id="nianOnboarding">
+                    <div class="onb-slide" id="onbSlide0">
+                        <div class="onb-card">
+                            <div class="onb-card-content">
+                                <div class="onb-typewriter" id="tw0"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="onb-slide" id="onbSlide1" style="display:none">
+                        <div class="onb-card">
+                            <div class="onb-card-content">
+                                <div class="onb-typewriter" id="tw1"></div>
+                                <div class="onb-shared"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="onb-slide" id="onbSlide2" style="display:none">
+                        <div class="onb-card">
+                            <div class="onb-card-content">
+                                <div class="onb-typewriter" id="tw2"></div>
+                                <div class="onb-spacer"></div>
+                                <div class="onb-start" id="onbStartBtn" style="display:none">开始</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="onb-dots" id="onbDots">
+                        <span class="onb-dot active"></span>
+                        <span class="onb-dot"></span>
+                        <span class="onb-dot"></span>
+                    </div>
+                </div>
+                <div class="nian-chat-messages" id="nianChatMessages">
+                    <div class="nian-message assistant">
+                        <div class="nian-message-text">你好呀！我是念念，你的 AI 日记伴侣。有什么想和我分享的吗？</div>
+                    </div>
+                </div>
+                <div class="nian-chat-input-container">
+                    <div class="nian-chat-options" id="nianChatOptions">
+                        <div class="nian-chat-option" onclick="openNotePicker()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <span>引用笔记</span>
+                        </div>
+                        <div class="nian-chat-option" onclick="enterInsightMode()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor" stroke="none"/></svg>
+                            <span>深度洞察</span>
+                        </div>
+                        <div class="nian-chat-option" onclick="insertRememberTag()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            <span>帮我记</span>
+                        </div>
+                    </div>
+                    <!-- 引用预览条 -->
+                    <div class="nian-ref-preview" id="nianRefPreview" style="display:none">
+                        <span class="nian-ref-preview-text" id="nianRefPreviewText"></span>
+                        <span class="nian-ref-preview-close" onclick="clearNoteReference()">✕</span>
+                    </div>
+                    <!-- 洞察选择器 -->
+                    <div class="insight-picker" id="insightPicker" style="display:none">
+                        <div class="insight-picker-header">
+                            <span class="insight-picker-back" id="insightPickerBack" style="display:none" onclick="goBackInsightStep()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
+                            </span>
+                            <span class="insight-picker-title" id="insightPickerTitle">选择笔记</span>
+                            <span class="insight-picker-close" onclick="closeInsightPicker()">✕</span>
+                        </div>
+                        <div class="insight-picker-chips" id="insightPickerChips"></div>
+                    </div>
+                    <div class="nian-chat-input-wrapper">
+                        <textarea class="nian-chat-input" id="nianChatInput" placeholder="输入消息..." rows="1" onkeydown="handleNianInput(event)" oninput="autoGrowInput(this)"></textarea>
+                        <div class="nian-chat-send" onclick="sendNianMessage()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="page" id="mePage">
+                <div class="me-header">
+                    <div class="me-avatar" id="meAvatar" onclick="editMeAvatar()">念</div>
+                    <div class="me-name" id="meName" contenteditable="true">念念</div>
+                    <div class="me-sub" id="meSub" contenteditable="true">A Quiet Journal</div>
+                </div>
+
+                <div class="me-stats-row">
+                    <div class="me-stat-card">
+                        <div class="me-stat-value" id="statNotes">0</div>
+                        <div class="me-stat-label">笔记</div>
+                    </div>
+                    <div class="me-stat-card">
+                        <div class="me-stat-value" id="statTags">0</div>
+                        <div class="me-stat-label">标签</div>
+                    </div>
+                    <div class="me-stat-card">
+                        <div class="me-stat-value" id="statDays">0</div>
+                        <div class="me-stat-label">天</div>
+                    </div>
+                </div>
+
+                <div class="heatmap" id="meHeatmap">
+                    <div class="heatmap-header">
+                        <span class="heatmap-title"><span class="accent">活动</span></span>
+                        <span class="heatmap-summary" id="heatmapMonths"></span>
+                    </div>
+                    <div class="heatmap-body">
+                        <div class="heatmap-days">
+                            <div class="heatmap-day-label"></div>
+                            <div class="heatmap-day-label">一</div>
+                            <div class="heatmap-day-label"></div>
+                            <div class="heatmap-day-label">三</div>
+                            <div class="heatmap-day-label"></div>
+                            <div class="heatmap-day-label">五</div>
+                            <div class="heatmap-day-label"></div>
+                        </div>
+                        <div class="heatmap-grid-wrap">
+                            <div class="heatmap-grid" id="heatmapGrid"></div>
+                        </div>
+                    </div>
+                    <div class="heatmap-legend">
+                        <span>少</span>
+                        <div class="heatmap-legend-cell"></div>
+                        <div class="heatmap-legend-cell l1"></div>
+                        <div class="heatmap-legend-cell l2"></div>
+                        <div class="heatmap-legend-cell l3"></div>
+                        <div class="heatmap-legend-cell l4"></div>
+                        <span>多</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="page" id="explorePage">
+                <div class="explore-page-header">
+                    <div class="explore-page-title">探索</div>
+                    <div class="explore-page-sub">Discover</div>
+                </div>
+                <div class="explore-page-grid">
+                    <div class="explore-card" onclick="openInsight()">
+                        <div class="explore-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
+                        <div class="explore-card-label">洞察</div>
+                        <div class="explore-card-desc">16种分析模式深度理解笔记</div>
+                    </div>
+                    <div class="explore-card" onclick="openMailbox()">
+                        <div class="explore-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="13" rx="2"/><polyline points="2 6 12 14 22 6"/></svg></div>
+                        <div class="explore-card-label">信箱</div>
+                        <div class="explore-card-desc">AI笔友回信，温暖陪伴</div>
+                    </div>
+                    <div class="explore-card" onclick="openMemory()">
+                        <div class="explore-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C9 2 7 4 7 6.5C7 8 8 9 9 10C7.5 10 6 11.5 6 13.5C6 16 8 18 9 18C9.5 18 10 17.5 10.5 17H13.5C14 17.5 14.5 18 15 18C16 18 18 16 18 13.5C18 11.5 16.5 10 15 10C16 9 17 8 17 6.5C17 4 15 2 12 2Z"/></svg></div>
+                        <div class="explore-card-label">记忆</div>
+                        <div class="explore-card-desc">管理念念的记忆档案</div>
+                    </div>
+                    <div class="explore-card" onclick="window.location.href='stats.html'">
+                        <div class="explore-card-icon"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"><path d="M24 40C32.8366 40 40 32.8366 40 24C40 15.1634 32.8366 8 24 8C15.1634 8 8 15.1634 8 24C8 32.8366 15.1634 40 24 40Z"/><path d="M37.5641 15.5098C41.7833 15.878 44.6787 17.1724 45.2504 19.306C46.3939 23.5737 37.8068 29.5827 26.0705 32.7274C14.3343 35.8721 3.89316 34.9617 2.74963 30.694C2.1505 28.458 4.22245 25.744 8.01894 23.2145" stroke-linecap="round"/></svg></div>
+                        <div class="explore-card-label">统计</div>
+                        <div class="explore-card-desc">写作数据的藏宝图</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="page" id="insightHubPage">
+                <div class="insight-hub-grid" id="insightHubGrid"></div>
+            </div>
+        </div>
+
+        <div class="backdrop" id="backdrop" onclick="closeSidebar(); closeFab();"></div>
+
+        <div class="bottom-nav">
+            <div class="nav-label active" id="navNotes" onclick="switchToNotes()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span>笔记</span>
+            </div>
+            <div class="nav-label" id="navNian" onclick="switchToNian()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                    <line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+                </svg>
+                <span>念念</span>
+            </div>
+            <div class="nav-label" id="navExplore" onclick="switchToExplore()">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round">
+                    <path d="M24 40C32.8366 40 40 32.8366 40 24C40 15.1634 32.8366 8 24 8C15.1634 8 8 15.1634 8 24C8 32.8366 15.1634 40 24 40Z"/>
+                    <path d="M37.5641 15.5098C41.7833 15.878 44.6787 17.1724 45.2504 19.306C46.3939 23.5737 37.8068 29.5827 26.0705 32.7274C14.3343 35.8721 3.89316 34.9617 2.74963 30.694C2.1505 28.458 4.22245 25.744 8.01894 23.2145" stroke-linecap="round"/>
+                </svg>
+                <span>探索</span>
+            </div>
+        </div>
+
+        <div class="note-fab" id="noteFab" onclick="openEditor()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+        </div>
+    </div>
+
+        <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings()"></div>
+        <div class="settings" id="settingsPanel">
+            <div class="settings-header" id="settingsHeader">
+                <div class="settings-header-left">
+                    <div class="settings-back" onclick="closeSettings()" id="settingsBackBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </div>
+                    <span class="settings-title" id="settingsTitle">设置</span>
+                </div>
+            </div>
+            <div class="settings-content" id="settingsContent">
+                <div class="settings-section" id="settingsMenu">
+                    <div class="settings-group">
+                        <div class="settings-menu-item" onclick="openSettingsSub('ai')">
+                            <div class="settings-menu-item-left">
+                                <div class="settings-menu-item-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                    </svg>
+                                </div>
+                                <div class="settings-menu-item-text">
+                                    <div class="settings-menu-item-label">AI 设置</div>
+                                    <div class="settings-menu-item-desc">配置 AI 模型、API 地址和密钥</div>
+                                </div>
+                            </div>
+                            <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                        <div class="settings-menu-item" onclick="openSettingsSub('import')">
+                            <div class="settings-menu-item-left">
+                                <div class="settings-menu-item-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                </div>
+                                <div class="settings-menu-item-text">
+                                    <div class="settings-menu-item-label">导入/导出</div>
+                                    <div class="settings-menu-item-desc">备份和恢复笔记数据</div>
+                                </div>
+                            </div>
+                            <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                        <div class="settings-menu-item" onclick="openSettingsSub('prompts')">
+                            <div class="settings-menu-item-left">
+                                <div class="settings-menu-item-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+                                    </svg>
+                                </div>
+                                <div class="settings-menu-item-text">
+                                    <div class="settings-menu-item-label">提示词管理</div>
+                                    <div class="settings-menu-item-desc">编辑洞察模式的 AI 提示词</div>
+                                </div>
+                            </div>
+                            <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-sub" id="settingsSubAi">
+                    <div class="settings-section">
+                        <div class="settings-group">
+                            <div class="settings-group-item">
+                                <div class="settings-label">API 地址</div>
+                                <div class="settings-desc">AI 模型的 API 端点地址</div>
+                                <input class="settings-input" id="aiApiUrl" placeholder="https://api.openai.com/v1" />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">API 密钥</div>
+                                <div class="settings-desc">你的 API Key</div>
+                                <input class="settings-input" id="aiApiKey" type="password" placeholder="sk-..." />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">模型选择</div>
+                                <div class="settings-desc">输入 AI 模型名称（如 gpt-4o、deepseek-chat 等）</div>
+                                <input class="settings-input" id="aiModel" placeholder="gpt-4o" />
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;">
+                            <button class="settings-btn settings-btn-primary" onclick="saveAISettings()">保存 AI 设置</button>
+                            <div class="settings-status" id="aiSettingsStatus"></div>
+                        </div>
+                    </div>
+                </div>
+
+                                <div class="settings-sub" id="settingsSubImport">
+                    <div class="settings-section">
+                        <div class="settings-group">
+                            <div class="settings-group-item">
+                                <div class="settings-label">导入 flomo HTML 备份</div>
+                                <div class="settings-desc">选择 flomo 导出的 HTML 文件，自动识别日期、标签、内容</div>
+                                <input type="file" id="importFileInput" accept="text/html,text/plain" style="display:none" onchange="handleImportFile(event)">
+                                <button class="settings-btn settings-btn-primary" onclick="document.getElementById('importFileInput').click()" style="margin-top:10px;width:100%;">选择 HTML 文件</button>
+                                <div id="importStatus" style="font-size:14px;color:var(--text-muted);margin-top:8px;line-height:1.5;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-sub" id="settingsSubPrompts">
+                    <div class="settings-section">
+                        <div class="settings-group" id="promptsListContainer"></div>
+                        <div style="margin-top:12px;">
+                            <button class="settings-btn settings-btn-primary" onclick="savePromptSettings()">保存全部</button>
+                            <div class="settings-status" id="promptSettingsStatus"></div>
+                        </div>
+                                    </div>
+                </div>
+
+            </div>
+        </div>
+
+<div class="editor" id="editor">
+        <div class="editor-handle"></div>
+        <div class="editor-header">
+            <div class="editor-cancel" onclick="closeEditor()">取消</div>
+            <div class="editor-title" id="editorTitle">新笔记</div>
+            <div class="editor-save" onclick="saveNote()">保存</div>
+        </div>
+        <div class="editor-body">
+            <div class="editor-wrapper">
+                <div class="editor-textarea" id="noteContent" contenteditable="true" data-placeholder="写下此刻的想法..." oninput="updateDisplay()" onkeydown="handleEditorListKey(event)" onpaste="handleEditorPaste(event)"></div>
+            </div>
+            <div class="editor-image-strip" id="editorImageStrip"></div>
+            <div class="editor-toolbar">
+                <button class="editor-toolbar-btn" onclick="insertHashAndSuggest()" title="插入标签">#</button>
+                <div class="editor-toolbar-divider"></div>
+                <button class="editor-toolbar-btn" id="tbUl" onclick="insertFormat('ul')" title="无序列表">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/>
+                        <circle cx="5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.5" fill="currentColor" stroke="none"/>
+                    </svg>
+                </button>
+                <button class="editor-toolbar-btn" id="tbOl" onclick="insertFormat('ol')" title="有序列表">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="10" y1="6" x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/>
+                        <path d="M3 7l2-3h1M3 11l-1 2h2M3 17l-1 2h2"/>
+                    </svg>
+                </button>
+                <div class="editor-toolbar-divider"></div>
+                <button class="editor-toolbar-btn editor-toolbar-btn-img" id="tbBold" onclick="toggleBold()" title="粗体"><b>B</b></button>
+                <button class="editor-toolbar-btn editor-toolbar-btn-img" id="tbUnderline" onclick="toggleUnderline()" title="下划线"><u>U</u></button>
+                <div class="editor-toolbar-divider"></div>
+                <div class="editor-toolbar-btn editor-toolbar-btn-img" title="图片">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <input type="file" accept="image/*" multiple onchange="handleImagePick(event)" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer">
+                </div>
+            </div>
+            <div class="tag-hint">输入 <code>#标签</code> 来添加标签</div>
+        </div>
+        <div class="tag-suggestions" id="tagSuggestions"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="dev-hint" id="devHint"></div>
+
+    <div class="confirm-overlay" id="confirmOverlay" onclick="closeConfirm()"></div>
+    <div class="confirm-dialog" id="confirmDialog">
+        <div class="confirm-text" id="confirmText">确定要删除这条笔记吗？</div>
+        <div class="confirm-actions">
+            <div class="confirm-btn confirm-cancel" onclick="closeConfirm()">取消</div>
+            <div class="confirm-btn confirm-ok" id="confirmOkBtn">删除</div>
+        </div>
+    </div>
+
+    <div class="penpal-sheet-overlay" id="penpalSheetOverlay" onclick="closePenpalSheet()"></div>
+    <div class="penpal-sheet" id="penpalSheet">
+        <div class="penpal-sheet-handle"></div>
+        <div class="penpal-sheet-title">选择笔友</div>
+        <div class="penpal-sheet-subtitle" id="penpalSheetSubtitle">选择一位笔友，将这篇笔记寄给 Ta</div>
+        <div class="penpal-sheet-list" id="penpalSheetList"></div>
+    </div>
+
+    <div class="insight-sheet-overlay" id="insightSheetOverlay" onclick="closeInsightSheet()"></div>
+    <div class="insight-sheet" id="insightSheet">
+        <div class="insight-sheet-handle"></div>
+        <div class="insight-sheet-title">选择洞察模式</div>
+        <div class="insight-sheet-subtitle">选择一种方式，分析这篇笔记</div>
+        <div class="insight-method-list" id="insightMethodList"></div>
+    </div>
+
+    <!-- Note picker sheet -->
+    <div class="penpal-sheet-overlay" id="notePickerOverlay" onclick="closeNotePicker()"></div>
+    <div class="penpal-sheet" id="notePickerSheet">
+        <div class="penpal-sheet-handle"></div>
+        <div class="penpal-sheet-title">选择笔记</div>
+        <input class="note-picker-search" id="notePickerSearch" placeholder="搜索笔记..." oninput="filterNotePicker()">
+        <div class="penpal-sheet-list" id="notePickerList"></div>
+    </div>
+
+    <!-- Conversation history panel -->
+    <div class="history-overlay" id="historyOverlay" onclick="closeHistoryPanel()"></div>
+    <div class="history-panel" id="historyPanel">
+        <div class="history-panel-header">
+            <span class="history-panel-title">对话历史</span>
+            <span class="history-panel-close" onclick="closeHistoryPanel()">✕</span>
+        </div>
+        <div class="history-panel-list" id="historyList"></div>
+        <div class="history-panel-footer">
+            <div class="history-panel-new" onclick="newConversation()">＋ 新对话</div>
+        </div>
+    </div>
+
+    <div class="onboarding" id="onboarding">
+        <div class="onboarding-skip" id="onboardingSkip" onclick="skipOnboarding()">跳过</div>
+        <div class="onboarding-slides" id="onboardingSlides">
+
+            <div class="onboarding-slide onboarding-1-bg">
+                <div class="onboarding-slide-icon">
+                    <div class="onboarding-1-pen">
+                        <div class="onboarding-1-circle"></div>
+                        <div class="onboarding-1-ink"></div>
+                        <div class="onboarding-1-nib"></div>
+                        <div class="onboarding-1-text">念念</div>
+                    </div>
+                </div>
+                <div class="onboarding-slide-title">记录此刻</div>
+                <div class="onboarding-slide-keywords">
+                    <span class="onboarding-slide-keyword" style="background:#f5e6d0;color:#7a5c30;">随手记</span>
+                    <span class="onboarding-slide-keyword" style="background:#f0e8da;color:#8b7355;">捕捉灵感</span>
+                    <span class="onboarding-slide-keyword" style="background:#ebe0d2;color:#9c8465;">标记生活</span>
+                </div>
+                <div class="onboarding-slide-desc">用文字、标签、图片记录当下的想法，把每一刻的灵感都留存下来</div>
+            </div>
+
+            <div class="onboarding-slide onboarding-2-bg">
+                <div class="onboarding-slide-icon">
+                    <div class="onboarding-2-bubble-wrap">
+                        <div class="onboarding-2-ring"></div>
+                        <div class="onboarding-2-ring"></div>
+                        <div class="onboarding-2-core">💭</div>
+                        <div class="onboarding-2-bubble">今天辛苦了</div>
+                        <div class="onboarding-2-bubble">我懂你 💛</div>
+                        <div class="onboarding-2-bubble">慢慢来</div>
+                    </div>
+                </div>
+                <div class="onboarding-slide-title">念念懂你</div>
+                <div class="onboarding-slide-keywords">
+                    <span class="onboarding-slide-keyword" style="background:#ffe8dc;color:#c06030;">24h 陪伴</span>
+                    <span class="onboarding-slide-keyword" style="background:#ffd8c8;color:#d07048;">倾听你</span>
+                    <span class="onboarding-slide-keyword" style="background:#ffccb8;color:#dd8058;">温暖回应</span>
+                </div>
+                <div class="onboarding-slide-desc">念念是懂你的 AI 伙伴，无论何时何地，倾听你的心声，回应你的情绪</div>
+            </div>
+
+            <div class="onboarding-slide onboarding-3-bg">
+                <div class="onboarding-slide-icon">
+                    <div class="onboarding-3-prism-wrap">
+                        <div class="onboarding-3-rays" id="rays"></div>
+                        <div class="onboarding-3-prism"></div>
+                        <div class="onboarding-3-prism-glow"></div>
+                        <div class="onboarding-3-star" style="--dur:2.2s;--delay:0s;top:10px;right:20px;width:5px;height:5px;"></div>
+                        <div class="onboarding-3-star" style="--dur:1.8s;--delay:0.7s;top:30px;right:50px;width:3px;height:3px;"></div>
+                        <div class="onboarding-3-star" style="--dur:2.5s;--delay:1.4s;bottom:20px;left:10px;width:4px;height:4px;"></div>
+                        <div class="onboarding-3-star" style="--dur:1.6s;--delay:0.3s;bottom:40px;right:15px;width:3px;height:3px;"></div>
+                        <div class="onboarding-3-star" style="--dur:2.0s;--delay:1.0s;top:50px;left:20px;width:4px;height:4px;"></div>
+                    </div>
+                </div>
+                <div class="onboarding-slide-title">发现自我</div>
+                <div class="onboarding-slide-keywords">
+                    <span class="onboarding-slide-keyword" style="background:#dae0f5;color:#3a50a0;">深度洞察</span>
+                    <span class="onboarding-slide-keyword" style="background:#d0d8f0;color:#4862b8;">看见成长</span>
+                    <span class="onboarding-slide-keyword" style="background:#c8d4ed;color:#5874c4;">反思复盘</span>
+                </div>
+                <div class="onboarding-slide-desc">通过 AI 深度分析，发现文字背后的情绪与成长轨迹，遇见更清晰的自己</div>
+            </div>
+
+            <div class="onboarding-slide onboarding-4-bg" id="onboardingSlide4">
+                <div class="onboarding-4-particles" id="onboardingParticles"></div>
+                <div class="onboarding-slide-icon" style="margin-bottom:20px;">
+                    <svg width="70" height="70" viewBox="0 0 70 70" fill="none">
+                        <circle cx="35" cy="35" r="34" fill="#fff" stroke="#e8e6e3" stroke-width="1.5"/>
+                        <circle cx="35" cy="35" r="26" fill="#faf9f7"/>
+                        <text x="35" y="42" text-anchor="middle" font-size="28" font-weight="800" fill="#e85d04" font-family="serif">念</text>
+                    </svg>
+                </div>
+                <div class="onboarding-4-brand">开始<span>念念</span></div>
+                <div class="onboarding-4-slogan">拓展你的思考，安放你的情绪</div>
+                <button class="onboarding-4-btn" id="onboardingStartBtn">开始记录</button>
+            </div>
+
+        </div>
+        <div class="onboarding-footer">
+            <div class="onboarding-dots" id="onboardingDots">
+                <div class="onboarding-dot active"></div>
+                <div class="onboarding-dot"></div>
+                <div class="onboarding-dot"></div>
+                <div class="onboarding-dot"></div>
+            </div>
+            <button class="onboarding-btn" id="onboardingMainBtn" onclick="nextOnboardingSlide()">下一页</button>
+            <button class="onboarding-btn onboarding-btn-secondary" id="onboardingBackBtn" onclick="prevOnboardingSlide()" style="display:none;">上一页</button>
+        </div>
+    </div>
+
+    <!-- Full-screen note viewer -->
+    <div class="note-expand-overlay" id="noteExpandOverlay" onclick="closeNoteExpand()"></div>
+    <div class="note-expand-viewer" id="noteExpandViewer">
+        <div class="note-expand-close" onclick="closeNoteExpand()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </div>
+        <div class="note-expand-scroll" id="noteExpandScroll">
+            <div class="note-expand-date" id="noteExpandDate"></div>
+            <div class="note-expand-body" id="noteExpandBody"></div>
+            <div class="note-expand-meta" id="noteExpandMeta"></div>
+        </div>
+    </div>
+
+    <div class="image-preview-overlay" id="imagePreviewOverlay" onclick="closeImagePreview()">
+        <div class="image-preview-close" onclick="closeImagePreview()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </div>
+        <div class="image-preview-container" id="imagePreviewContainer">
+            <div class="image-preview-loading" id="imagePreviewLoading">加载中...</div>
+        </div>
+    </div>
+
+    <script src="skills/send_proactive_mail.js"></script>
+    <script src="skills/update_archive.js"></script>
+    <script src="skills/get_weather.js"></script>
+    <script src="skills/web_search.js"></script>
+    <script src="skills/create_note.js"></script>
+    <script src="skills/search_notes.js"></script>
+    <script src="skills/list_insight_modes.js"></script>
+    <script src="skills/run_insight.js"></script>
+    <script src="insight/insight_prompts.js"></script>
+    <script src="agent.js"></script>
+    <script src="app.js"></script>
+    <script src="v6-integration.js"></script>
+</body>
+</html>

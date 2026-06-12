@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>记忆</title>
+    <link rel="stylesheet" href="memory.css">
+</head>
+<body>
+    <div class="app">
+        <div class="memory-header">
+            <button class="memory-back" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="memory-header-center">
+                <button class="mem-head-tab active" data-tab="profile" onclick="switchTab('profile')">档案</button>
+                <span class="memory-header-title">记忆</span>
+                <button class="mem-head-tab" data-tab="facts" onclick="switchTab('facts')">事实</button>
+            </div>
+            <button class="dreaming-btn" onclick="openDreamingDialog()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    <circle cx="17" cy="8" r="1" fill="currentColor" stroke="none"/>
+                    <circle cx="14" cy="5" r="0.7" fill="currentColor" stroke="none"/>
+                    <circle cx="19" cy="4" r="0.5" fill="currentColor" stroke="none"/>
+                    <circle cx="20" cy="11" r="0.6" fill="currentColor" stroke="none"/>
+                    <circle cx="16" cy="14" r="0.5" fill="currentColor" stroke="none"/>
+                </svg>
+                <span>dreaming</span>
+            </button>
+        </div>
+
+        <div class="memory-body">
+            <div class="memory-content" id="memoryContent"></div>
+        </div>
+
+        <div class="dialog-overlay" id="dreamingOverlay" onclick="closeDreamingDialog()">
+            <div class="dialog-card" onclick="event.stopPropagation()">
+                <div class="dialog-title">记忆整理</div>
+                <div class="dialog-info" id="dreamingDialogInfo"></div>
+                <div class="dialog-question">是否开始整理记忆？</div>
+                <div class="dialog-actions">
+                    <button class="dialog-btn cancel" onclick="closeDreamingDialog()">取消</button>
+                    <button class="dialog-btn confirm" onclick="confirmDreaming()">确认整理</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="memory.js"></script>
+</body>
+</html>

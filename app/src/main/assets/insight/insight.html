@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>洞察</title>
+    <link rel="stylesheet" href="insight.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Main page -->
+        <div class="insight-header">
+            <div class="back-btn" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </div>
+            <div class="header-title">洞察</div>
+            <div class="header-actions">
+                <div class="back-btn" onclick="openHistory()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="back-btn" onclick="document.getElementById('methodGrid').innerHTML = ''; loadPrompts();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="method-grid" id="methodGrid"></div>
+
+        <!-- Note search overlay -->
+        <div class="note-search-overlay" id="noteSearchOverlay" onclick="closeNoteSearch()"></div>
+        <div class="note-search-panel" id="noteSearchPanel">
+            <div class="note-search-handle"></div>
+            <div class="note-search-input-wrap">
+                <input type="text" class="note-search-input" id="noteSearchInput" placeholder="搜索笔记..." oninput="filterNotes()">
+            </div>
+            <div class="note-search-list" id="noteSearchList"></div>
+        </div>
+
+        <!-- Insight result -->
+        <div class="insight-result" id="insightResult">
+            <div class="insight-result-header">
+                <div class="back-btn" onclick="closeResult()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <div class="result-title" id="resultTitle"></div>
+            </div>
+            <div class="insight-result-body">
+                <div class="result-note" id="resultNote"></div>
+                <div class="result-content" id="resultContent"></div>
+            </div>
+        </div>
+
+        <!-- History page -->
+        <div class="insight-history" id="insightHistory">
+            <div class="insight-result-header">
+                <div class="back-btn" onclick="closeHistory()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <div class="result-title">历史洞察</div>
+            </div>
+            <div class="insight-history-list" id="historyList"></div>
+        </div>
+    </div>
+
+    <script src="insight_prompts.js"></script>
+    <script src="insight.js"></script>
+</body>
+</html>

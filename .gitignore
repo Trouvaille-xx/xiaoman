@@ -1,0 +1,67 @@
+# ── Android / Gradle ──
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+*.dex
+*.class
+*.log
+build_output.log
+
+# ── Gradle home (misplaced) ──
+.gradle_home/
+
+# ── IDE ──
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.swp
+*.swo
+
+# ── Kotlin error logs ──
+.kotlin/
+
+# ── Local properties ──
+local.properties
+
+# ── Claude Code ──
+.claude/
+.superpowers/
+
+# ── Debug / temp / one-off scripts ──
+^
+BuildApk.java
+TestLoopback.java
+_debug_script.py
+_test_clean2.js
+_test_clean3.js
+_test_clean4.js
+build.ps1
+build_direct.ps1
+build_no_daemon.bat
+build_runner.bat
+build_try.sh
+do_build.bat
+do_build.cmd
+fix_prompt.py
+insert_js.py
+v6-patch.js
+v6-integration-backup.js
+roadshow.html
+scripts/
+
+# ── Design experiments ──
+design-preview/
+
+# ── Dev notes / docs (not source code) ──
+devlog.md
+memory_research.md
+docs/
+
+# ── OS files ──
+.DS_Store
+Thumbs.db
+desktop.ini

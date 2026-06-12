@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 把 context.filesDir/images/ 暴露为 content://...fileprovider/images/ -->
+    <files-path name="images" path="images/" />
+    <files-path name="thumbs" path="thumbs/" />
+</paths>
