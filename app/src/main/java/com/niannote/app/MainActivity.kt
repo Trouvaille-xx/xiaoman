@@ -40,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private val storageKey = "nian_notes_data"
     private val settingsKey = "nian_settings"
     private val mailsKey = "nian_mails"
+    private val authKey = "nian_auth"
 
     private var lastTop = 0
     private var lastBottom = 0
@@ -98,7 +99,21 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(FileInterface(this), "AndroidFile")
         webView.addJavascriptInterface(ImageInterface(this), "AndroidImage")
         webView.addJavascriptInterface(HttpInterface(), "AndroidHttp")
+        webView.addJavascriptInterface(ApiInterface(), "AndroidApi")
+        webView.addJavascriptInterface(AuthInterface(this), "AndroidAuth")
         webView.loadUrl("file:///android_asset/app.html")
+        injectBackendConfig()
+    }
+
+    private fun injectBackendConfig() {
+        // 把后端地址注入到 WebView 全局，JS 端通过 window.__NianBackend.url 访问
+        val url = BuildConfig.BACKEND_URL.replace("'", "\\'")
+        webView.post {
+            webView.evaluateJavascript(
+                "window.__NianBackend = { url: '$url' };",
+                null
+            )
+        }
     }
 
     private fun applySafeInsets() {
@@ -460,6 +475,61 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 "{\"error\":\"${e.message}\"}"
             }
+        }
+    }
+
+    // ─── ApiInterface: POST + 自定义 Header，给后端 API 用 ───
+    inner class ApiInterface {
+        @JavascriptInterface
+        fun post(url: String, body: String, authToken: String): String {
+            return try {
+                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setRequestProperty("Authorization", "Bearer $authToken")
+                connection.setRequestProperty("User-Agent", "NianAndroid/1.0")
+                connection.connectTimeout = 15000
+                connection.readTimeout = 60000
+                connection.doOutput = true
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+                // 返回 {status, body} 让 JS 判断 HTTP 状态
+                "{\"status\":$status,\"body\":${JSONObject.quote(text)}}"
+            } catch (e: Exception) {
+                "{\"status\":0,\"body\":${JSONObject.quote("{\"error\":\"${e.message}\"}")}}"
+            }
+        }
+    }
+
+    // ─── AuthInterface: 存/读 JWT token ───
+    inner class AuthInterface(private val context: Context) {
+        @JavascriptInterface
+        fun getAuthJson(): String {
+            val prefs = context.getSharedPreferences(authKey, android.content.Context.MODE_PRIVATE)
+            val token = prefs.getString("token", "") ?: ""
+            val userId = prefs.getString("user_id", "") ?: ""
+            val username = prefs.getString("username", "") ?: ""
+            return "{\"token\":\"${token}\",\"user_id\":\"${userId}\",\"username\":\"${username}\"}"
+        }
+
+        @JavascriptInterface
+        fun saveAuth(token: String, userId: String, username: String) {
+            context.getSharedPreferences(authKey, android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("token", token)
+                .putString("user_id", userId)
+                .putString("username", username)
+                .apply()
+        }
+
+        @JavascriptInterface
+        fun clearAuth() {
+            context.getSharedPreferences(authKey, android.content.Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .apply()
         }
     }
 

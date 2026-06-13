@@ -128,66 +128,41 @@
         document.getElementById('penpalSheetOverlay').classList.remove('open');
     };
 
-    window.selectPenpal = function(penpalId) {
+        window.selectPenpal = function(penpalId) {
         closePenpalSheet();
         var pp = PENPALS.find(function(p) { return p.id === penpalId; });
         if (!pp || !pendingNoteContent) return;
 
-        var mailId = 'mail_' + Date.now();
-        var mail = {
-            id: mailId,
-            penpalId: penpalId,
-            noteContent: pendingNoteContent,
-            reply: '',
-            sentAt: Date.now(),
-            status: 'sending',
-            read: false
-        };
-
-        // Save to localStorage / bridge
-        saveMailItem(mail);
-        showToast('已寄出，等待回信...');
-
-        // Get API config
-        var config;
-        try { config = JSON.parse(typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : (localStorage.getItem('nian_settings') || '{}')); } catch(e) { config = {}; }
-        if (!config.apiUrl || !config.apiKey) {
-            mail.status = 'failed';
-            mail.reply = '(请先配置 API)';
-            saveMailItem(mail);
-            updateMailBadge();
-            return;
-        }
-
-        var url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config.apiKey },
-            body: JSON.stringify({
-                model: config.model || 'gpt-4o',
-                messages: [
-                    { role: 'system', content: pp.prompt },
-                    { role: 'user', content: '我写了一篇笔记，请以你的风格给我回信。笔记内容：\n\n' + pendingNoteContent.replace(/<[^>]+>/g, '').substring(0, 1000) }
-                ],
-                max_tokens: 400, temperature: 0.8
-            })
-        }).then(function(r) { return r.json(); }).then(function(data) {
-            var reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-            if (reply) {
-                reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
-                mail.reply = reply;
-                mail.status = 'replied';
-                mail.repliedAt = Date.now();
-                saveMailItem(mail);
-                updateMailBadge();
-                showToast(p.p.name + '回信了');
+        // 注入云端 API 配置
+        var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
+        var token = '';
+        try {
+            var raw = typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : '{}';
+            var s = raw ? JSON.parse(raw) : {};
+            token = s.nian_auth_token || '';
+            if (token) {
+                s.apiUrl = backendUrl;
+                s.apiKey = token;
+                s.model = 'deepseek-v4-flash';
+                AndroidSettings.saveSettings(JSON.stringify(s));
             }
-        }).catch(function() {
-            mail.status = 'failed';
-            mail.reply = '(回信失败，请检查网络和API配置)';
-            saveMailItem(mail);
-            updateMailBadge();
-        });
+        } catch(e) {}
+
+        // 用 Kotlin MailInterface -> MailWorker (后台线程原生 HttpURLConnection)
+        // 清理笔记内容的 HTML 标签
+        var clean = pendingNoteContent
+            .replace(/--isHTML\s*/, '')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+            .trim();
+        if (typeof AndroidMail !== 'undefined') {
+            AndroidMail.sendMail(clean, penpalId, pp.name, pp.prompt);
+        }
+        pendingNoteContent = '';
+        showToast('已寄给 ' + pp.name + '，等待回信');
     };
 
     function saveMailItem(mail) {
@@ -612,13 +587,24 @@
             '</div>' +
             '<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-family:\'Noto Serif SC\',serif">念念正在思考...</div>';
 
-        // Get API config
+        // Get API config — 注入云端配置
         var config;
         try {
+            // 先写入云端 apiUrl/token 到 SharedPreferences
+            var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
+            var raw = typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : null;
+            var s = raw ? JSON.parse(raw) : {};
+            var token = s.nian_auth_token || '';
+            if (token) {
+                s.apiUrl = backendUrl;
+                s.apiKey = token;
+                s.model = 'deepseek-v4-flash';
+                AndroidSettings.saveSettings(JSON.stringify(s));
+            }
             config = JSON.parse(typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : (localStorage.getItem('nian_settings') || '{}'));
         } catch(e) { config = {}; }
         if (!config.apiUrl || !config.apiKey) {
-            document.getElementById('noteExpandBody').innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-muted)">请先在设置中配置 API</div>';
+            document.getElementById('noteExpandBody').innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-muted)">请先在设置中配置 API [' + (token ? 'token OK' : 'no token') + ']</div>';
             return;
         }
 
@@ -768,6 +754,7 @@
             }).join('');
         }
         updateDrawerActive('insight');
+        history.pushState({ page: 'insightHub' }, '', '#insightHub');
     };
 
     // ── Method Editor Popup ──
@@ -1008,6 +995,18 @@
     // Year bar always visible
     setTimeout(function() { updateYearBar(); updateHeaderMeta(); }, 300);
 
+    // Show header briefly on first load as a hint, then hide
+    setTimeout(function() {
+        if (headerEl && !hasScrolled) {
+            headerEl.classList.add('revealed');
+            updateHeaderMeta();
+            updateYearBar();
+            setTimeout(function() {
+                if (!hasScrolled && headerEl) headerEl.classList.remove('revealed');
+            }, 2000);
+        }
+    }, 800);
+
     if (contentEl) {
         contentEl.addEventListener('scroll', function() {
             updateYearBar();
@@ -1016,8 +1015,8 @@
                 if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
                 if (headerEl) headerEl.classList.remove('revealed');
             }
-            // Reveal on pull to top (more generous threshold)
-            if (contentEl.scrollTop <= 10 && hasScrolled && headerEl && !headerEl.classList.contains('revealed')) {
+            // Reveal on pull to top
+            if (contentEl.scrollTop <= 10 && headerEl && !headerEl.classList.contains('revealed')) {
                 if (!revealTimer) revealTimer = setTimeout(function() {
                     headerEl.classList.add('revealed');
                     updateHeaderMeta();

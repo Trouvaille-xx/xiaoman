@@ -130,7 +130,8 @@
               { role: "user", content: "以下是我的日记内容，请进行分析：\n\n" + noteContent }
             ],
             temperature: 0.8,
-            max_tokens: 2000
+            max_tokens: 2000,
+            thinking: { type: "disabled" }
           };
 
           var xhr = new XMLHttpRequest();

@@ -13,9 +13,9 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <div class="memory-header-center">
-                <button class="mem-head-tab active" data-tab="profile" onclick="switchTab('profile')">档案</button>
+                <button class="mem-head-tab" data-tab="profile" onclick="switchTab('profile')">档案</button>
                 <span class="memory-header-title">记忆</span>
-                <button class="mem-head-tab" data-tab="facts" onclick="switchTab('facts')">事实</button>
+                <button class="mem-head-tab active" data-tab="summary" onclick="switchTab('summary')">摘要</button>
             </div>
             <button class="dreaming-btn" onclick="openDreamingDialog()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -45,8 +45,32 @@
                 </div>
             </div>
         </div>
+        <div class="dialog-overlay" id="dreamingProgressOverlay" style="display:none;">
+            <div class="dialog-card dreaming-progress-card" onclick="event.stopPropagation()">
+                <div class="dialog-title" id="dreamingProgressTitle">正在整理记忆...</div>
+                <div class="dreaming-progress-bar">
+                    <div class="dreaming-progress-fill" id="dreamingProgressFill" style="width:0%;"></div>
+                </div>
+                <div class="dreaming-stage-list">
+                    <div class="dreaming-stage" id="dreamingStage1">
+                        <span class="dreaming-stage-icon">○</span>
+                        <span class="dreaming-stage-label">阶段 1: 生成摘要</span>
+                    </div>
+                    <div class="dreaming-stage" id="dreamingStage2">
+                        <span class="dreaming-stage-icon">○</span>
+                        <span class="dreaming-stage-label">阶段 2: 主题聚类</span>
+                    </div>
+                    <div class="dreaming-stage" id="dreamingStage3">
+                        <span class="dreaming-stage-icon">○</span>
+                        <span class="dreaming-stage-label">阶段 3: 存入记忆</span>
+                    </div>
+                </div>
+                <div class="dreaming-progress-log" id="dreamingProgressLog"></div>
+            </div>
+        </div>
     </div>
 
+    <script src="../auth.js"></script>
     <script src="memory.js"></script>
 </body>
 </html>

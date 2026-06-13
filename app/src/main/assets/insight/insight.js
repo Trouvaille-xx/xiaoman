@@ -194,9 +194,34 @@ function selectNote(noteId) {
 }
 
 function generateInsight() {
+    // 注入云端 API 配置
+    var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
+    var token = '';
+    var debugInfo = '';
+    try {
+        var authRaw = typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : null;
+        debugInfo += 'settings:' + (authRaw ? 'OK' : 'NULL') + ' ';
+        if (authRaw) {
+            var a = JSON.parse(authRaw);
+            token = a.nian_auth_token || '';
+            debugInfo += 'token:' + (token ? token.substring(0, 10) + '...' : 'EMPTY') + ' ';
+        }
+    } catch(e) { debugInfo += 'err:' + e.message; }
+    if (token && typeof AndroidSettings !== 'undefined') {
+        var raw = AndroidSettings.loadSettings();
+        var s = raw ? JSON.parse(raw) : {};
+        s.apiUrl = backendUrl;
+        s.apiKey = token;
+        s.model = 'deepseek-v4-flash';
+        AndroidSettings.saveSettings(JSON.stringify(s));
+        debugInfo += 'injected';
+    } else {
+        debugInfo += 'SKIP(token empty or no bridge)';
+    }
+
     var settings = DataService.settings.load();
     if (!settings || !settings.apiUrl || !settings.apiKey) {
-        showError('请先在设置中配置 AI 参数（API 地址、密钥、模型）');
+        showError('请先在设置中配置 AI 参数（API 地址、密钥、模型） [' + debugInfo + ']');
         return;
     }
 
@@ -227,7 +252,8 @@ function generateInsight() {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: noteContent }
             ],
-            temperature: 0.7
+            temperature: 0.7,
+            thinking: { type: "disabled" }
         })
     })
     .then(function(res) {

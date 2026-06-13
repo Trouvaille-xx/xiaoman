@@ -15,6 +15,14 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        // 后端地址 — 从 gradle.properties 读（必须以 /v1 结尾，OpenAI 兼容路径）
+        val backendUrl = (project.findProperty("BACKEND_URL") as String?) ?: "http://10.0.2.2:3456/v1"
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {

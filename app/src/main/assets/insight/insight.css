@@ -38,7 +38,7 @@ html, body {
     justify-content: space-between;
     padding: 0 16px;
     padding-top: calc(var(--safe-area-top) + 12px);
-    padding-bottom: 4px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
     background: var(--bg);
     position: relative;
@@ -248,7 +248,7 @@ html, body {
     gap: 8px;
     padding: 0 16px;
     padding-top: calc(var(--safe-area-top) + 12px);
-    padding-bottom: 8px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
     background: var(--bg);
     position: relative;

@@ -249,7 +249,7 @@ html, body {
     display: none; flex-shrink: 0;
     padding: 12px 16px; border-top: 1px solid var(--border);
     background: var(--bg);
-    padding-bottom: calc(var(--safe-area-bottom) + 12px);
+    padding-bottom: 12px;
 }
 .reply-compose.open { display: block; }
 .reply-compose-input {

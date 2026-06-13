@@ -53,9 +53,21 @@
         model: "",
         messages: msgs,
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 2000,
+        thinking: { type: "disabled" }
       };
-      if (tools.length > 0) payload.tools = tools;
+      // 只发 update_archive 工具（URL 长度限制，只送最关键的记忆写入工具）
+      var memoryTool = self.skills['update_archive'];
+      if (memoryTool) {
+        payload.tools = [{
+          type: "function",
+          function: {
+            name: memoryTool.definition.name,
+            description: memoryTool.definition.description,
+            parameters: memoryTool.definition.parameters
+          }
+        }];
+      }
 
       self._callLLM(payload, function(err, response) {
         if (err) {
@@ -148,35 +160,49 @@
       payload.model = config.model || "gpt-4o";
 
       var url = config.apiUrl.replace(/\/+$/, "") + "/chat/completions";
+      var body = JSON.stringify(payload);
+      var authToken = config.apiKey;
 
+      // 用 AndroidHttp.get (原生 HttpURLConnection, auth 也是这个 bridge)
+      // 注意: 此方法是同步调用，会阻塞 JS 线程。用 setTimeout 异步化，确保 UI 先渲染用户消息。
+      if (typeof AndroidHttp !== 'undefined' && AndroidHttp && AndroidHttp.get) {
+        setTimeout(function() {
+          try {
+            var qs = 'token=' + encodeURIComponent(authToken) + '&q=' + encodeURIComponent(body);
+            var sep = url.indexOf('?') === -1 ? '?' : '&';
+            var result = AndroidHttp.get(url + sep + qs);
+            var parsed = JSON.parse(result);
+            if (parsed.choices && parsed.choices[0]) {
+              callback(null, parsed);
+            } else if (parsed.error) {
+              callback(new Error("[HttpG] " + parsed.error));
+            } else {
+              callback(new Error("[HttpG] unexpected response: " + (result || '').substring(0, 200)));
+            }
+          } catch(e) {
+            callback(new Error("[HttpG] " + (e.message || e)));
+          }
+        }, 50);
+        return;
+      }
+
+      // fallback: XHR (浏览器/本地 dev)
       var xhr = new XMLHttpRequest();
       xhr.open("POST", url);
       xhr.setRequestHeader("Content-Type", "application/json");
       xhr.setRequestHeader("Authorization", "Bearer " + config.apiKey);
-
       xhr.timeout = 30000;
-      xhr.ontimeout = function() {
-        callback(new Error("Request timeout"));
-      };
-
+      xhr.ontimeout = function() { callback(new Error("[XHR] Request timeout")); };
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            var data = JSON.parse(xhr.responseText);
-            callback(null, data);
-          } catch(e) {
-            callback(new Error("Parse error: " + e.message));
-          }
+          try { var data = JSON.parse(xhr.responseText); callback(null, data); }
+          catch(e) { callback(new Error("[XHR] Parse error: " + e.message)); }
         } else {
-          callback(new Error("HTTP " + xhr.status + ": " + xhr.responseText));
+          callback(new Error("[XHR] HTTP " + xhr.status + ": " + xhr.responseText));
         }
       };
-
-      xhr.onerror = function() {
-        callback(new Error("Network error"));
-      };
-
-      xhr.send(JSON.stringify(payload));
+      xhr.onerror = function() { callback(new Error("[XHR] Network error")); };
+      xhr.send(body);
     } catch(e) {
       callback(e);
     }
