@@ -10,6 +10,7 @@ app/build/
 build_output.log
 admin/logs.jsonl
 *.bak
+hotupdate/.watch.pid
 
 # ── Gradle home (misplaced) ──
 .gradle_home/
