@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>念念信箱</title>
+    <title>小满信箱</title>
     <link rel="stylesheet" href="mail.css">
 </head>
 <body>
@@ -15,11 +15,38 @@
                 </div>
                 <span class="mail-header-title">信箱</span>
             </div>
+            <div class="mail-view-tabs" id="mailViewTabs">
+                <span class="mail-view-tab active" id="tabPenpals" onclick="switchMailView('penpals')">笔友</span>
+                <span class="mail-view-tab" id="tabWall" onclick="switchMailView('wall')">全部来信</span>
+            </div>
         </div>
 
-        <div class="penpal-filter" id="penpalFilter"></div>
+        <!-- 笔友列表（默认首页） -->
+        <div class="penpal-wall" id="penpalWall"></div>
 
-        <div class="mail-list" id="envelopeWall"></div>
+        <!-- 全部来信视图 -->
+        <div id="wallView" style="display:none">
+            <div class="penpal-filter" id="penpalFilter"></div>
+            <div class="mail-list" id="envelopeWall"></div>
+        </div>
+
+        <!-- 笔友对话流 -->
+        <div class="thread-overlay" id="threadOverlay" onclick="closeThread()"></div>
+        <div class="thread-view" id="threadView">
+            <div class="thread-header">
+                <div class="mail-back" onclick="closeThread()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <span class="thread-title" id="threadTitle">对话</span>
+            </div>
+            <div class="thread-body" id="threadBody"></div>
+            <div class="thread-compose">
+                <textarea class="thread-compose-input" id="threadInput" placeholder="写封信给 Ta，Ta 会回信…"></textarea>
+                <div class="thread-compose-actions">
+                    <button class="letter-reply-btn primary" onclick="sendThreadLetter()">寄出</button>
+                </div>
+            </div>
+        </div>
 
         <div class="letter-detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
         <div class="letter-detail" id="detailPanel">
@@ -41,6 +68,9 @@
         </div>
     </div>
 
+    <script src="../app-config.js"></script>
+    <script src="../native-http.js"></script>
+    <script src="../conversation-memory.js"></script>
     <script src="mail.js"></script>
 </body>
 </html>

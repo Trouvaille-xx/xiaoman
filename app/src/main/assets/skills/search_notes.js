@@ -3,7 +3,7 @@
   window.searchNotesSkill = {
     definition: {
       name: "search_notes",
-      description: "搜索用户的日记笔记，支持按关键词、标签、日期范围筛选。返回笔记的摘要列表供念念参考。",
+      description: "搜索用户的日记笔记，支持按关键词、标签、日期范围筛选。返回笔记的摘要列表供小满参考。",
       parameters: {
         type: "object",
         properties: {

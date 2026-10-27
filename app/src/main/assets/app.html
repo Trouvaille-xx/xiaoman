@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>念念 - AI 日记</title>
+    <title>小满 - AI 日记</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -67,9 +67,9 @@
         }
 
         .header {
+            box-sizing: border-box;
             padding-top: calc(var(--safe-area-top) + 8px);
-            padding-bottom: 12px;
-            height: 76px;
+            min-height: 62px;
             display: flex;
             align-items: center;
             justify-content: flex-start;
@@ -81,16 +81,55 @@
             z-index: 10;
         }
 
+        /* 全局品牌标：图形标（黑猫）+ 手写字标，母版见 mascot/logo/cat-mark.png */
         .header-brand {
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
-            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
-            font-size: 28px;
-            font-weight: 400;
-            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 7px;
             white-space: nowrap;
-            letter-spacing: 4px;
+        }
+
+        .brand-mark {
+            display: block;
+            flex: none;
+        }
+
+        .header-brand .brand-mark {
+            width: 23px;
+            height: 23px;
+        }
+
+        .header-brand .brand-word,
+        .header-brand .brand-dot {
+            font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+            font-size: 21px;
+            font-weight: 400;
+            line-height: 1;
+            padding-bottom: 2px;
+        }
+
+        .header-brand .brand-word {
+            color: var(--text);
+            letter-spacing: 3px;
+        }
+
+        .header-brand .brand-dot {
+            color: var(--accent);
+            margin-left: -3px;
+        }
+
+        /* 洞察模式：只留文字，收起图形标与朱砂点 */
+        .header-brand.is-plain .brand-mark,
+        .header-brand.is-plain .brand-dot {
+            display: none;
+        }
+
+        .header-brand.is-plain .brand-word {
+            font-size: 20px;
+            padding-bottom: 0;
         }
 
         .header-icon {
@@ -269,6 +308,17 @@
         .drawer-brand {
             padding: calc(24px + var(--safe-area-top)) 24px 20px;
             border-bottom: 1px solid rgba(60,40,20,0.1);
+        }
+
+        .drawer-lockup {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .drawer-lockup .brand-mark {
+            width: 38px;
+            height: 38px;
         }
 
         .drawer-title {
@@ -546,20 +596,12 @@
 
         /* ===== Insight Hub Page ===== */
         .insight-hub-header {
-            display: flex; align-items: center; justify-content: center;
+            display: flex; align-items: center; gap: 12px;
             padding: 0 16px; padding-top: calc(var(--safe-area-top) + 8px);
             padding-bottom: 8px; border-bottom: 1px solid var(--border);
             background: var(--bg); flex-shrink: 0;
         }
         .insight-hub-back {
-            width: 38px; height: 38px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; border-radius: 10px;
-            background: var(--card); border: 1px solid var(--border);
-        }
-        .insight-hub-back:active { border-color: var(--accent); }
-        .insight-hub-back svg { width: 20px; height: 20px; color: var(--text); }
-        .insight-hub-title {
             width: 38px; height: 38px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; border-radius: 10px;
@@ -792,12 +834,17 @@
         }
 
         .content {
-            height: calc(100% - (var(--safe-area-top) + 76px));
+            height: calc(100% - (var(--safe-area-top) + 62px));
             overflow-y: auto;
             padding: 0 16px 100px;
         }
 
         .content::-webkit-scrollbar { display: none; }
+
+        /* 对话页：输入面板下沉，贴近底部悬浮导航。
+           只收窄 .content 的底部留白，不动输入框自身的内边距，
+           所以键盘弹出时输入框仍由 updateChatKeyboardMargin 按键盘顶边闭环校正。 */
+        .content.chat-active { padding-bottom: 72px; }
 
         /* ===== Notes Editorial Header (V6) ===== */
         .notes-year-bar {
@@ -861,10 +908,6 @@
             display: none;
             flex-direction: column;
             height: 100%;
-        }
-
-        #nianPage.active {
-            justify-content: flex-end;
         }
 
         .page.active {
@@ -1426,7 +1469,7 @@
 
         .nian-message {
             display: flex;
-            gap: 6px;
+            gap: 4px;
             max-width: 100%;
         }
 
@@ -1441,6 +1484,21 @@
             max-width: 100%;
         }
 
+        /* 小满形象：助手消息左侧头像。纯 CSS 实现（.nian-message 本身是 flex），
+           不依赖任何消息生成分支，历史消息与新消息都会带上。
+           头像缩小并向左偏移，把省下的横向空间让给文本。 */
+        .nian-message.assistant::before {
+            content: '';
+            flex: none;
+            width: 22px;
+            height: 22px;
+            margin-top: 3px;
+            margin-left: -15px;
+            border-radius: 50%;
+            background: url('mascot/xiaoman-avatar.png') center/cover no-repeat;
+        }
+        .nian-message.assistant .nian-message-text { width: auto; flex: 1; min-width: 0; }
+
         .nian-message-text {
             padding: 12px 16px;
             border-radius: 18px;
@@ -1452,6 +1510,61 @@
             width: 100%;
         }
         .nian-message.user .nian-message-text { width: auto; }
+
+        /* 用户消息纵向堆叠：气泡在上，引用的笔记折叠条在下 */
+        .nian-msg-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .nian-msg-stack > .nian-message-text { width: auto; max-width: 100%; }
+
+        /* 引用笔记折叠条：默认只占一行，点击展开全文 */
+        .nian-ref-chip-wrap { max-width: 100%; font-family: 'Noto Sans SC', sans-serif; }
+        .nian-ref-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 100%;
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(60,40,20,0.03);
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-muted);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .nian-ref-chip:active { background: rgba(60,40,20,0.07); }
+        .nian-ref-chip-arrow { flex: none; font-size: 10px; opacity: 0.65; }
+        .nian-ref-chip-title { flex: none; color: var(--text); font-weight: 500; }
+        .nian-ref-chip-preview {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            opacity: 0.85;
+        }
+        .nian-ref-body {
+            display: none;
+            margin-top: 4px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(60,40,20,0.03);
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            /* 不设高度上限：折叠条默认只占一行，展开是用户的主动选择，
+               再压一层 max-height 会让"展开了还看不全"，靠内层滚动条翻正文在手机上很难操作。 */
+            text-align: left;
+        }
+        .nian-ref-chip-wrap.open .nian-ref-body { display: block; }
 
         /* Markdown formatting in chat */
         .nian-message-text pre {
@@ -1574,11 +1687,9 @@
         }
         .nian-chat-option svg { flex-shrink: 0; }
 
-        /* 引用预览条 */
+        /* 引用预览条：默认显示两行摘要，点击展开笔记全文 */
         .nian-ref-preview {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            display: block;
             padding: 8px 12px;
             margin-bottom: 8px;
             background: var(--accent-light);
@@ -1587,75 +1698,64 @@
             font-size: 13px;
             color: var(--text);
         }
+        .nian-ref-preview-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
         .nian-ref-preview-text {
             flex: 1;
+            min-width: 0;
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .nian-ref-preview-arrow {
+            flex: none;
+            margin-top: 2px;
+            font-size: 10px;
+            opacity: 0.6;
         }
         .nian-ref-preview-close {
             cursor: pointer;
             color: var(--text-muted);
             font-size: 14px;
             flex-shrink: 0;
+            margin-top: 1px;
+            padding-left: 2px;
         }
         .nian-ref-preview-close:active { color: var(--text); }
 
-        /* 引用笔记折叠卡片（对话气泡下方） */
-        .nian-ref-card {
-            align-self: flex-end;
-            max-width: 85%;
-            margin: 2px 0 8px 0;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            background: var(--card);
-            font-size: 13px;
-            flex-shrink: 0;
-        }
-        .nian-ref-card-header {
+        /* 引用笔记全文弹层（复用 penpal-sheet 的滑入动画与遮罩） */
+        .ref-note-sheet {
+            max-height: 90vh;
             display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            cursor: pointer;
-            user-select: none;
+            flex-direction: column;
         }
-        .nian-ref-card-header:active { background: var(--accent-light); }
-        .nian-ref-card-icon { flex-shrink: 0; }
-        .nian-ref-card-date {
-            flex-shrink: 0;
-            font-size: 11px;
+        .ref-note-sheet .penpal-sheet-title { padding-bottom: 2px; }
+        .ref-note-sheet-meta {
+            font-size: 12px;
             color: var(--text-muted);
+            text-align: center;
+            padding: 0 20px 12px;
         }
-        .nian-ref-card-preview {
+        .ref-note-sheet-body {
             flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            color: var(--text-secondary);
-        }
-        .nian-ref-card-arrow {
-            flex-shrink: 0;
-            font-size: 10px;
-            color: var(--text-muted);
-            transition: transform 0.2s;
-        }
-        .nian-ref-card.expanded .nian-ref-card-arrow {
-            transform: rotate(90deg);
-        }
-        .nian-ref-card-body {
-            display: none;
-            padding: 0 10px 10px;
-            color: var(--text-secondary);
-            line-height: 1.6;
+            min-height: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 18px 18px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text);
             white-space: pre-wrap;
-            word-break: break-word;
-            border-top: 1px solid var(--border);
-            margin: 0 10px;
-        }
-        .nian-ref-card.expanded .nian-ref-card-body {
-            display: block;
-            padding-top: 8px;
+            word-wrap: break-word;
+            text-align: left;
         }
 
         /* 对话历史面板 */
@@ -1792,11 +1892,15 @@
         }
         .onb-spacer { height: 24px; }
         .onb-shared {
-            width: 60px; height: 60px;
+            width: 72px; height: 72px;
             margin: 20px auto 0;
             border-radius: 50%;
-            background: linear-gradient(135deg, #e8e0f0, #d0d5f0);
-            opacity: 0.6;
+            background: url('mascot/xiaoman-avatar.png') center/cover no-repeat;
+        }
+        /* 开场页形象图 */
+        .onb-mascot {
+            display: block; width: 128px; height: auto;
+            margin: 0 auto 14px;
         }
         .onb-start {
             display: inline-block;
@@ -1962,21 +2066,22 @@
         /* ===== Floating Island Nav (V6) ===== */
         .bottom-nav {
             position: absolute;
-            left: 50%;
+            left: 20px;
+            right: 80px;
             bottom: calc(24px + var(--safe-area-bottom));
-            transform: translateX(-50%);
             width: auto;
             height: auto;
             background: var(--text);
-            border-radius: 32px;
-            padding: 6px;
+            border-radius: 999px;
+            padding: 5px;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 2px;
             border-top: none;
             box-shadow: 0 8px 24px rgba(60,40,20,0.3), 0 0 0 1px rgba(0,0,0,0.05);
             z-index: 50;
-            padding-bottom: 6px;
+            padding-bottom: 5px;
             box-sizing: content-box;
         }
 
@@ -1985,8 +2090,9 @@
             align-items: center;
             justify-content: center;
             gap: 0;
-            height: 50px;
-            min-width: 50px;
+            height: 44px;
+            flex: 1;
+            min-width: 0;
             padding: 0;
             cursor: pointer;
             color: rgba(245, 240, 230, 0.5);
@@ -1994,7 +2100,7 @@
             font-size: 13px;
             font-weight: 600;
             letter-spacing: 2px;
-            border-radius: 25px;
+            border-radius: 999px;
             transition: min-width 420ms var(--spring), padding 420ms var(--spring), gap 420ms var(--spring), background 420ms var(--spring), color 300ms var(--ease);
             white-space: nowrap;
             overflow: hidden;
@@ -2006,7 +2112,6 @@
         .nav-label.active {
             background: var(--accent);
             color: var(--bg);
-            min-width: 110px;
             padding: 0 20px;
             gap: 8px;
             box-shadow: 0 4px 12px var(--accent-glow);
@@ -2460,6 +2565,7 @@
         }
         .settings-content {
             flex: 1;
+            min-height: 0;
             overflow-y: auto;
             padding: 16px;
         }
@@ -2873,6 +2979,92 @@
 
         .insight-method-name { font-size: 14px; font-weight: 600; color: var(--text); }
         .insight-method-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
+        /* ─── AI 配图 sheet ─── */
+        .image-gen-styles {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 0 16px 12px;
+        }
+        .image-gen-style-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s var(--ease);
+        }
+        .image-gen-style-card:active { transform: scale(0.97); }
+        .image-gen-style-card.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+        .image-gen-style-thumb {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background: var(--accent-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: var(--accent);
+            overflow: hidden;
+        }
+        .image-gen-style-thumb img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .image-gen-style-name {
+            padding: 8px 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            text-align: center;
+            font-family: 'Noto Serif SC', serif;
+        }
+        /* 生成结果区 */
+        .image-gen-result {
+            padding: 0 16px 12px;
+            display: none;
+        }
+        .image-gen-result.show { display: block; }
+        .image-gen-result img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: block;
+        }
+        .image-gen-result-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .image-gen-result-actions button {
+            flex: 1;
+            padding: 10px 0;
+            border-radius: 10px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: opacity 0.2s var(--ease);
+        }
+        .image-gen-result-actions button:active { opacity: 0.8; }
+        .image-gen-download-btn { background: var(--accent); color: #fff; }
+        .image-gen-redo-btn { background: var(--accent-light); color: var(--text); }
+        .image-gen-actions {
+            padding: 0 16px 10px;
+        }
+        .image-gen-status {
+            padding: 0 16px 14px;
+            font-size: 12px;
+            color: var(--text-muted);
+            min-height: 18px;
+        }
+        .image-gen-status.error { color: #e5484d; }
 
         /* ─── 洞察选择器 (输入框上方) ─── */
         .insight-picker {
@@ -3550,6 +3742,14 @@
             margin: 2px 3px;
             font-family: 'Noto Sans SC', sans-serif;
         }
+        /* 展开预览中的列表：符号不贴左边缘 */
+        .note-expand-body ul, .note-expand-body ol {
+            padding-left: 1.6em;
+            margin: 8px 0;
+        }
+        .note-expand-body li {
+            margin: 4px 0;
+        }
 
         .note-expand-meta {
             margin-top: 24px;
@@ -3630,8 +3830,14 @@
 
         <div class="drawer" id="sidebar">
             <div class="drawer-brand">
-                <div class="drawer-title">念念<span class="accent">.</span></div>
-                <div class="drawer-sub">A Quiet Journal · 静默手记</div>
+                <div class="drawer-lockup">
+                    <!-- 品牌标母版见 mascot/logo/cat-mark.png（透明底，顶栏克隆这份节点复用） -->
+                    <img class="brand-mark" src="mascot/xiaoman-logo.png" alt="">
+                    <div>
+                        <div class="drawer-title">小满<span class="accent">.</span></div>
+                        <div class="drawer-sub">A Quiet Journal · 静默手记</div>
+                    </div>
+                </div>
             </div>
 
             <div class="drawer-section">
@@ -3642,11 +3848,11 @@
                 </button>
                 <button class="drawer-item" id="drawerNian" onclick="switchToNian();closeSidebar()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-                    <span class="drawer-item-label">念念</span>
+                    <span class="drawer-item-label">小满</span>
                 </button>
                 <button class="drawer-item" id="drawerMail" onclick="openMailbox();closeSidebar()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><polyline points="2 6 12 14 22 6"/></svg>
-                    <span class="drawer-item-label">信箱</span>
+                    <span class="drawer-item-label">邮件</span>
                     <span class="drawer-item-count" id="mailUnreadBadge" style="display:none">0</span>
                 </button>
                 <button class="drawer-item" id="drawerMe" onclick="switchToMe();closeSidebar()">
@@ -3690,9 +3896,6 @@
                     <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
                 </svg>
             </div>
-            <div id="insightExitBtn" class="header-icon" onclick="exitInsightMode()" style="display:none" title="退出洞察">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
             <div class="header-icon" id="historyIcon" onclick="toggleHistoryPanel()" style="display:none">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/>
@@ -3729,14 +3932,14 @@
                     </svg>
                     <span>AI回顾</span>
                 </div>
-                <div class="explore-action" onclick="showToast('念念日记开发中~')">
+                <div class="explore-action" onclick="showToast('小满日记开发中~')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
                         <line x1="16" y1="13" x2="8" y2="13"/>
                         <line x1="16" y1="17" x2="8" y2="17"/>
                     </svg>
-                    <span>念念日记</span>
+                    <span>小满日记</span>
                 </div>
                 <div class="explore-action" onclick="showToast('更多功能开发中~')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -3766,6 +3969,7 @@
                     <div class="onb-slide" id="onbSlide0">
                         <div class="onb-card">
                             <div class="onb-card-content">
+                                <img class="onb-mascot" src="mascot/xiaoman-logo.png" alt="">
                                 <div class="onb-typewriter" id="tw0"></div>
                             </div>
                         </div>
@@ -3795,7 +3999,7 @@
                 </div>
                 <div class="nian-chat-messages" id="nianChatMessages">
                     <div class="nian-message assistant">
-                        <div class="nian-message-text">你好呀！我是念念，你的 AI 日记伴侣。有什么想和我分享的吗？</div>
+                        <div class="nian-message-text">你好呀！我是小满，你的 AI 日记伴侣。有什么想和我分享的吗？</div>
                     </div>
                 </div>
                 <div class="nian-chat-input-container">
@@ -3815,8 +4019,11 @@
                     </div>
                     <!-- 引用预览条 -->
                     <div class="nian-ref-preview" id="nianRefPreview" style="display:none">
-                        <span class="nian-ref-preview-text" id="nianRefPreviewText"></span>
-                        <span class="nian-ref-preview-close" onclick="clearNoteReference()">✕</span>
+                        <div class="nian-ref-preview-row" onclick="openRefNoteSheet()">
+                            <span class="nian-ref-preview-text" id="nianRefPreviewText"></span>
+                            <span class="nian-ref-preview-arrow">▸</span>
+                            <span class="nian-ref-preview-close" onclick="event.stopPropagation(); clearNoteReference()">✕</span>
+                        </div>
                     </div>
                     <!-- 洞察选择器 -->
                     <div class="insight-picker" id="insightPicker" style="display:none">
@@ -3842,8 +4049,8 @@
 
             <div class="page" id="mePage">
                 <div class="me-header">
-                    <div class="me-avatar" id="meAvatar" onclick="editMeAvatar()">念</div>
-                    <div class="me-name" id="meName" contenteditable="true">念念</div>
+                    <div class="me-avatar" id="meAvatar" onclick="editMeAvatar()">我</div>
+                    <div class="me-name" id="meName" contenteditable="true">我</div>
                     <div class="me-sub" id="meSub" contenteditable="true">A Quiet Journal</div>
                 </div>
 
@@ -3912,7 +4119,7 @@
                     <div class="explore-card" onclick="openMemory()">
                         <div class="explore-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C9 2 7 4 7 6.5C7 8 8 9 9 10C7.5 10 6 11.5 6 13.5C6 16 8 18 9 18C9.5 18 10 17.5 10.5 17H13.5C14 17.5 14.5 18 15 18C16 18 18 16 18 13.5C18 11.5 16.5 10 15 10C16 9 17 8 17 6.5C17 4 15 2 12 2Z"/></svg></div>
                         <div class="explore-card-label">记忆</div>
-                        <div class="explore-card-desc">管理念念的记忆档案</div>
+                        <div class="explore-card-desc">管理小满的记忆档案</div>
                     </div>
                     <div class="explore-card" onclick="window.location.href='stats.html'">
                         <div class="explore-card-icon"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"><path d="M24 40C32.8366 40 40 32.8366 40 24C40 15.1634 32.8366 8 24 8C15.1634 8 8 15.1634 8 24C8 32.8366 15.1634 40 24 40Z"/><path d="M37.5641 15.5098C41.7833 15.878 44.6787 17.1724 45.2504 19.306C46.3939 23.5737 37.8068 29.5827 26.0705 32.7274C14.3343 35.8721 3.89316 34.9617 2.74963 30.694C2.1505 28.458 4.22245 25.744 8.01894 23.2145" stroke-linecap="round"/></svg></div>
@@ -3923,9 +4130,6 @@
             </div>
 
             <div class="page" id="insightHubPage">
-                <div class="insight-hub-header">
-                    <div class="insight-hub-title">洞察</div>
-                </div>
                 <div class="insight-hub-grid" id="insightHubGrid"></div>
             </div>
         </div>
@@ -3946,7 +4150,7 @@
                     <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
                     <line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
                 </svg>
-                <span>念念</span>
+                <span>小满</span>
             </div>
             <div class="nav-label" id="navExplore" onclick="switchToExplore()">
                 <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round">
@@ -3988,14 +4192,14 @@
                                 </div>
                                 <div class="settings-menu-item-text">
                                     <div class="settings-menu-item-label">AI 设置</div>
-                                    <div class="settings-menu-item-desc">账号和云端 AI 服务</div>
+                                    <div class="settings-menu-item-desc">配置 AI 模型、API 地址和密钥</div>
                                 </div>
                             </div>
                             <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="9 18 15 12 9 6"/>
                             </svg>
                         </div>
-                        <div class="settings-menu-item" onclick="openSettingsSub('data')">
+                        <div class="settings-menu-item" onclick="openSettingsSub('import')">
                             <div class="settings-menu-item-left">
                                 <div class="settings-menu-item-icon">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4003,8 +4207,24 @@
                                     </svg>
                                 </div>
                                 <div class="settings-menu-item-text">
-                                    <div class="settings-menu-item-label">数据管理</div>
-                                    <div class="settings-menu-item-desc">导入和导出笔记数据</div>
+                                    <div class="settings-menu-item-label">导入/导出</div>
+                                    <div class="settings-menu-item-desc">备份和恢复笔记数据</div>
+                                </div>
+                            </div>
+                            <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </div>
+                        <div class="settings-menu-item" onclick="openSettingsSub('prompts')">
+                            <div class="settings-menu-item-left">
+                                <div class="settings-menu-item-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+                                    </svg>
+                                </div>
+                                <div class="settings-menu-item-text">
+                                    <div class="settings-menu-item-label">提示词管理</div>
+                                    <div class="settings-menu-item-desc">编辑洞察模式的 AI 提示词</div>
                                 </div>
                             </div>
                             <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4015,95 +4235,55 @@
                 </div>
 
                 <div class="settings-sub" id="settingsSubAi">
-                    <!-- 云版本：API 地址/密钥/模型由后端统一管理，UI 不展示 -->
-                    <div style="display:none" data-legacy-ai-config>
-                        <div class="settings-section">
-                            <div class="settings-group">
-                                <div class="settings-group-item">
-                                    <div class="settings-label">API 地址</div>
-                                    <div class="settings-desc">AI 模型的 API 端点地址</div>
-                                    <input class="settings-input" id="aiApiUrl" placeholder="https://api.openai.com/v1" />
-                                </div>
-                                <div class="settings-group-item">
-                                    <div class="settings-label">API 密钥</div>
-                                    <div class="settings-desc">你的 API Key</div>
-                                    <input class="settings-input" id="aiApiKey" type="password" placeholder="sk-..." />
-                                </div>
-                                <div class="settings-group-item">
-                                    <div class="settings-label">模型选择</div>
-                                    <div class="settings-desc">输入 AI 模型名称（如 gpt-4o、deepseek-chat 等）</div>
-                                    <input class="settings-input" id="aiModel" placeholder="gpt-4o" />
-                                </div>
-                            </div>
-                            <div style="margin-top:12px;">
-                                <button class="settings-btn settings-btn-primary" onclick="saveAISettings()">保存 AI 设置</button>
-                                <div class="settings-status" id="aiSettingsStatus"></div>
-                            </div>
-                        </div>
-                    </div>
                     <div class="settings-section">
                         <div class="settings-group">
                             <div class="settings-group-item">
-                                <div class="settings-label">AI 服务</div>
-                                <div class="settings-desc">由念念云端提供，无需配置</div>
+                                <div class="settings-label">API 地址</div>
+                                <div class="settings-desc">AI 模型的 API 端点地址</div>
+                                <input class="settings-input" id="aiApiUrl" placeholder="https://api.openai.com/v1" />
                             </div>
                             <div class="settings-group-item">
-                                <div class="settings-label">账号</div>
-                                <div class="settings-desc" id="settingsCloudUsername">已登录</div>
-                                <div style="margin-top:8px;">
-                                    <button class="settings-btn" onclick="nianLogout && nianLogout()">退出登录</button>
-                                </div>
+                                <div class="settings-label">API 密钥</div>
+                                <div class="settings-desc">你的 API Key</div>
+                                <input class="settings-input" id="aiApiKey" type="password" placeholder="sk-..." />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">模型选择</div>
+                                <div class="settings-desc">输入 AI 模型名称（如 gpt-4o、deepseek-chat 等）</div>
+                                <input class="settings-input" id="aiModel" placeholder="gpt-4o" />
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- 数据管理（二级菜单） -->
-                <div class="settings-sub" id="settingsSubData">
-                    <div class="settings-section">
                         <div class="settings-group">
-                            <div class="settings-menu-item" onclick="openSettingsSub('import')">
-                                <div class="settings-menu-item-left">
-                                    <div class="settings-menu-item-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                                        </svg>
-                                    </div>
-                                    <div class="settings-menu-item-text">
-                                        <div class="settings-menu-item-label">导入</div>
-                                        <div class="settings-menu-item-desc">从 flomo HTML 备份导入笔记</div>
-                                    </div>
-                                </div>
-                                <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="9 18 15 12 9 6"/>
-                                </svg>
+                            <div class="settings-group-item">
+                                <div class="settings-label">配图模型</div>
+                                <div class="settings-desc">图像生成模型（如 gpt-image-2、dall-e-3），留空则默认 gpt-image-2</div>
+                                <input class="settings-input" id="aiImageModel" placeholder="gpt-image-2" />
                             </div>
-                            <div class="settings-menu-item" onclick="openSettingsSub('export')">
-                                <div class="settings-menu-item-left">
-                                    <div class="settings-menu-item-icon">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                        </svg>
-                                    </div>
-                                    <div class="settings-menu-item-text">
-                                        <div class="settings-menu-item-label">导出</div>
-                                        <div class="settings-menu-item-desc">备份笔记为 MD / JSON / HTML</div>
-                                    </div>
-                                </div>
-                                <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="9 18 15 12 9 6"/>
-                                </svg>
+                            <div class="settings-group-item">
+                                <div class="settings-label">配图 API 地址（可选）</div>
+                                <div class="settings-desc">如果图像生成使用不同的 API 端点，在此填写（留空则复用上方 API 地址）</div>
+                                <input class="settings-input" id="aiImageApiUrl" placeholder="留空即复用 API 地址" />
                             </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">配图 API 密钥（可选）</div>
+                                <div class="settings-desc">图像生成专用的 API Key（若与主 API 不同，在此填写；留空则复用上方密钥）</div>
+                                <input class="settings-input" id="aiImageApiKey" type="password" placeholder="留空即复用 API 密钥" />
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;">
+                            <button class="settings-btn settings-btn-primary" onclick="saveAISettings()">保存 AI 设置</button>
+                            <div class="settings-status" id="aiSettingsStatus"></div>
+                            <button class="settings-btn settings-btn-secondary" onclick="testAIConnection()" style="margin-top:10px;">测试 AI 连接</button>
+                            <div class="settings-status" id="aiTestStatus" style="margin-top:6px;"></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 导入 flomo HTML -->
-                <div class="settings-sub" id="settingsSubImport">
+                                <div class="settings-sub" id="settingsSubImport">
                     <div class="settings-section">
                         <div class="settings-group">
                             <div class="settings-group-item">
-                                <div class="settings-label">从 flomo HTML 备份导入</div>
+                                <div class="settings-label">导入 flomo HTML 备份</div>
                                 <div class="settings-desc">选择 flomo 导出的 HTML 文件，自动识别日期、标签、内容</div>
                                 <input type="file" id="importFileInput" accept="text/html,text/plain" style="display:none" onchange="handleImportFile(event)">
                                 <button class="settings-btn settings-btn-primary" onclick="document.getElementById('importFileInput').click()" style="margin-top:10px;width:100%;">选择 HTML 文件</button>
@@ -4113,62 +4293,14 @@
                     </div>
                 </div>
 
-                <!-- 导出 -->
-                <div class="settings-sub" id="settingsSubExport">
+                <div class="settings-sub" id="settingsSubPrompts">
                     <div class="settings-section">
-                        <div class="settings-group">
-                            <div class="settings-group-item">
-                                <div class="settings-label">导出笔记</div>
-                                <div class="settings-desc">选择导出格式，将全部笔记保存为文件</div>
-                            </div>
+                        <div class="settings-group" id="promptsListContainer"></div>
+                        <div style="margin-top:12px;">
+                            <button class="settings-btn settings-btn-primary" onclick="savePromptSettings()">保存全部</button>
+                            <div class="settings-status" id="promptSettingsStatus"></div>
                         </div>
-                        <div class="settings-group" style="margin-top:12px;">
-                            <div class="settings-menu-item" onclick="exportNotes('md')">
-                                <div class="settings-menu-item-left">
-                                    <div class="settings-menu-item-icon" style="background:rgba(168,90,42,0.08);">
-                                        <span style="font-size:13px;font-weight:700;color:var(--accent);">MD</span>
                                     </div>
-                                    <div class="settings-menu-item-text">
-                                        <div class="settings-menu-item-label">Markdown 格式</div>
-                                        <div class="settings-menu-item-desc">纯文本，可导入 Obsidian / Notion 等</div>
-                                    </div>
-                                </div>
-                                <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                </svg>
-                            </div>
-                            <div class="settings-menu-item" onclick="exportNotes('json')">
-                                <div class="settings-menu-item-left">
-                                    <div class="settings-menu-item-icon" style="background:rgba(168,90,42,0.08);">
-                                        <span style="font-size:12px;font-weight:700;color:var(--accent);">{}</span>
-                                    </div>
-                                    <div class="settings-menu-item-text">
-                                        <div class="settings-menu-item-label">JSON 格式</div>
-                                        <div class="settings-menu-item-desc">结构化数据，可编程处理或迁移系统</div>
-                                    </div>
-                                </div>
-                                <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                </svg>
-                            </div>
-                            <div class="settings-menu-item" onclick="exportNotes('html')">
-                                <div class="settings-menu-item-left">
-                                    <div class="settings-menu-item-icon" style="background:rgba(168,90,42,0.08);">
-                                        <span style="font-size:12px;font-weight:700;color:var(--accent);">&lt;/&gt;</span>
-                                    </div>
-                                    <div class="settings-menu-item-text">
-                                        <div class="settings-menu-item-label">HTML 格式</div>
-                                        <div class="settings-menu-item-desc">保留富文本格式，可在浏览器查看</div>
-                                    </div>
-                                </div>
-                                <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                                </svg>
-                            </div>
-                        </div>
-                        <div id="exportStatus" style="font-size:14px;color:var(--text-muted);margin-top:8px;line-height:1.5;"></div>
-                    </div>
-                </div>
                 </div>
 
             </div>
@@ -4247,6 +4379,20 @@
         <div class="insight-method-list" id="insightMethodList"></div>
     </div>
 
+    <!-- AI 配图 sheet -->
+    <div class="insight-sheet-overlay" id="imageGenOverlay" onclick="closeImageGenSheet()"></div>
+    <div class="insight-sheet" id="imageGenSheet">
+        <div class="insight-sheet-handle"></div>
+        <div class="insight-sheet-title">AI 配图</div>
+        <div class="insight-sheet-subtitle">选择风格，根据这篇随记的内容生成配图</div>
+        <div class="image-gen-styles" id="imageGenStyles"></div>
+        <div class="image-gen-result" id="imageGenResult"></div>
+        <div class="image-gen-actions">
+            <button class="settings-btn settings-btn-primary" id="imageGenBtn" onclick="generateNoteImage()">生成配图</button>
+        </div>
+        <div class="image-gen-status" id="imageGenStatus"></div>
+    </div>
+
     <!-- Note picker sheet -->
     <div class="penpal-sheet-overlay" id="notePickerOverlay" onclick="closeNotePicker()"></div>
     <div class="penpal-sheet" id="notePickerSheet">
@@ -4254,6 +4400,15 @@
         <div class="penpal-sheet-title">选择笔记</div>
         <input class="note-picker-search" id="notePickerSearch" placeholder="搜索笔记..." oninput="filterNotePicker()">
         <div class="penpal-sheet-list" id="notePickerList"></div>
+    </div>
+
+    <!-- 引用笔记全文：点预览条打开，不受输入区高度挤压 -->
+    <div class="penpal-sheet-overlay" id="refNoteOverlay" onclick="closeRefNoteSheet()"></div>
+    <div class="penpal-sheet ref-note-sheet" id="refNoteSheet">
+        <div class="penpal-sheet-handle" onclick="closeRefNoteSheet()"></div>
+        <div class="penpal-sheet-title">引用的笔记</div>
+        <div class="ref-note-sheet-meta" id="refNoteSheetMeta"></div>
+        <div class="ref-note-sheet-body" id="refNoteSheetBody"></div>
     </div>
 
     <!-- Conversation history panel -->
@@ -4279,7 +4434,7 @@
                         <div class="onboarding-1-circle"></div>
                         <div class="onboarding-1-ink"></div>
                         <div class="onboarding-1-nib"></div>
-                        <div class="onboarding-1-text">念念</div>
+                        <div class="onboarding-1-text">小满</div>
                     </div>
                 </div>
                 <div class="onboarding-slide-title">记录此刻</div>
@@ -4302,13 +4457,13 @@
                         <div class="onboarding-2-bubble">慢慢来</div>
                     </div>
                 </div>
-                <div class="onboarding-slide-title">念念懂你</div>
+                <div class="onboarding-slide-title">小满懂你</div>
                 <div class="onboarding-slide-keywords">
                     <span class="onboarding-slide-keyword" style="background:#ffe8dc;color:#c06030;">24h 陪伴</span>
                     <span class="onboarding-slide-keyword" style="background:#ffd8c8;color:#d07048;">倾听你</span>
                     <span class="onboarding-slide-keyword" style="background:#ffccb8;color:#dd8058;">温暖回应</span>
                 </div>
-                <div class="onboarding-slide-desc">念念是懂你的 AI 伙伴，无论何时何地，倾听你的心声，回应你的情绪</div>
+                <div class="onboarding-slide-desc">小满是懂你的 AI 伙伴，无论何时何地，倾听你的心声，回应你的情绪</div>
             </div>
 
             <div class="onboarding-slide onboarding-3-bg">
@@ -4342,7 +4497,7 @@
                         <text x="35" y="42" text-anchor="middle" font-size="28" font-weight="800" fill="#e85d04" font-family="serif">念</text>
                     </svg>
                 </div>
-                <div class="onboarding-4-brand">开始<span>念念</span></div>
+                <div class="onboarding-4-brand">开始<span>小满</span></div>
                 <div class="onboarding-4-slogan">拓展你的思考，安放你的情绪</div>
                 <button class="onboarding-4-btn" id="onboardingStartBtn">开始记录</button>
             </div>
@@ -4386,159 +4541,26 @@
         </div>
     </div>
 
-    <!-- 认证遮罩：首次启动或未登录时显示 -->
-    <div id="authOverlay" class="auth-overlay" style="display:none;">
-        <div class="auth-card">
-            <div class="auth-title">念念</div>
-            <div class="auth-subtitle" id="authSubtitle">登录后开启你的 AI 日记</div>
-
-            <div id="authLoginForm" class="auth-form">
-                <input type="text" id="authLoginUsername" class="auth-input" placeholder="用户名" autocomplete="username">
-                <input type="password" id="authLoginPassword" class="auth-input" placeholder="密码" autocomplete="current-password">
-                <button class="auth-btn" onclick="authDoLogin()">登录</button>
-                <div class="auth-switch" onclick="authShowRegister()">没有账号？用邀请码注册</div>
-            </div>
-
-            <div id="authRegisterForm" class="auth-form" style="display:none;">
-                <div class="auth-invite-row">
-                    <input type="text" id="authRegInvite" class="auth-input auth-invite-input" placeholder="邀请码" autocomplete="off">
-                    <button class="auth-invite-btn" onclick="authFetchInvite()">获取邀请码</button>
-                </div>
-                <input type="text" id="authRegUsername" class="auth-input" placeholder="用户名（3-32 字符）" autocomplete="username">
-                <input type="password" id="authRegPassword" class="auth-input" placeholder="密码（至少 6 位）" autocomplete="new-password">
-                <button class="auth-btn" onclick="authDoRegister()">注册</button>
-                <div class="auth-switch" onclick="authShowLogin()">已有账号？登录</div>
-            </div>
-
-            <div id="authStatus" class="auth-status"></div>
-        </div>
-    </div>
-
-    <style>
-        .auth-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 99999;
-            background: var(--bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-        .auth-card {
-            width: 100%;
-            max-width: 360px;
-            background: var(--card);
-            border-radius: var(--radius);
-            padding: 32px 24px;
-            box-shadow: var(--shadow-card);
-        }
-        .auth-title {
-            font-size: 32px;
-            font-weight: 600;
-            color: var(--accent);
-            text-align: center;
-            margin-bottom: 8px;
-            font-family: 'Ma Shan Zheng', serif;
-        }
-        .auth-subtitle {
-            font-size: 14px;
-            color: var(--text-secondary);
-            text-align: center;
-            margin-bottom: 24px;
-        }
-        .auth-form {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .auth-input {
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            font-size: 15px;
-            background: var(--bg);
-            color: var(--text);
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .auth-input:focus {
-            border-color: var(--accent);
-        }
-        .auth-invite-row {
-            display: flex;
-            gap: 8px;
-        }
-        .auth-invite-input {
-            flex: 1;
-        }
-        .auth-invite-btn {
-            flex-shrink: 0;
-            padding: 12px 14px;
-            border: 1px solid var(--accent);
-            border-radius: var(--radius-sm);
-            background: var(--accent-light);
-            color: var(--accent);
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.2s;
-        }
-        .auth-invite-btn:active {
-            background: var(--accent);
-            color: #fff;
-        }
-        .auth-btn {
-            padding: 12px 16px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            margin-top: 4px;
-        }
-        .auth-btn:active {
-            opacity: 0.8;
-        }
-        .auth-btn:disabled {
-            opacity: 0.5;
-        }
-        .auth-switch {
-            text-align: center;
-            font-size: 13px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            margin-top: 8px;
-        }
-        .auth-switch:hover {
-            color: var(--accent);
-        }
-        .auth-status {
-            text-align: center;
-            font-size: 13px;
-            margin-top: 12px;
-            min-height: 18px;
-        }
-        .auth-status.error { color: #c0392b; }
-        .auth-status.success { color: var(--accent); }
-    </style>
-
-    <script src="auth.js"></script>
-
+    <script src="app-config.js"></script>
+    <script src="native-http.js"></script>
+    <script src="memory-service.js"></script>
+    <script src="memory-engine.js"></script>
+    <script src="conversation-memory.js"></script>
     <script src="skills/send_proactive_mail.js"></script>
     <script src="skills/update_archive.js"></script>
-    <script src="skills/dedup_facts.js"></script>
-    <script src="skills/write_summary.js"></script>
-    <script src="skills/render_memory.js"></script>
     <script src="skills/get_weather.js"></script>
     <script src="skills/web_search.js"></script>
     <script src="skills/create_note.js"></script>
     <script src="skills/search_notes.js"></script>
+    <script src="skills/get_note.js"></script>
+    <script src="skills/remember_to.js"></script>
+    <script src="skills/note_stats.js"></script>
+    <script src="skills/daily_review.js"></script>
+    <script src="skills/get_special_day.js"></script>
     <script src="skills/list_insight_modes.js"></script>
     <script src="skills/run_insight.js"></script>
+    <script src="skills/generate_note_image.js"></script>
+    <script src="skills/penpal_weekly_letter.js"></script>
     <script src="insight/insight_prompts.js"></script>
     <script src="agent.js"></script>
     <script src="app.js"></script>

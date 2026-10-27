@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>小满的记忆</title>
+    <link rel="stylesheet" href="memory.css">
+</head>
+<body>
+    <div class="app">
+        <div class="memory-header">
+            <button class="memory-back" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="memory-header-center">
+                <button class="mem-head-tab active" data-tab="user" onclick="switchTab('user')">用户记忆</button>
+                <span class="memory-header-title">小满的记忆</span>
+                <button class="mem-head-tab" data-tab="role" onclick="switchTab('role')">角色档案</button>
+            </div>
+            <button class="dreaming-btn" id="letterBtn" onclick="openLetterDialog()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="5" width="18" height="14" rx="2"/>
+                    <polyline points="3 7 12 13 21 7"/>
+                </svg>
+                <span>写信</span>
+            </button>
+        </div>
+
+        <div class="memory-body">
+            <div class="memory-content" id="memoryContent"></div>
+        </div>
+
+        <!-- 核心画像编辑 -->
+        <div class="dialog-overlay" id="profileOverlay" onclick="closeProfileEditor()">
+            <div class="dialog-card mem-edit-card" onclick="event.stopPropagation()">
+                <div class="dialog-title">编辑核心画像</div>
+                <div class="mem-form">
+                    <label class="mem-field"><span>名字</span><input class="moment-input" id="pfName" maxlength="30"></label>
+                    <label class="mem-field"><span>性别</span><input class="moment-input" id="pfGender" maxlength="10"></label>
+                    <label class="mem-field"><span>年龄</span><input class="moment-input" id="pfAge" maxlength="10"></label>
+                    <label class="mem-field"><span>职业</span><input class="moment-input" id="pfOccupation" maxlength="30"></label>
+                    <label class="mem-field"><span>所在城市</span><input class="moment-input" id="pfCity" maxlength="30"></label>
+                    <label class="mem-field"><span>情感状态</span><input class="moment-input" id="pfEmotion" maxlength="30"></label>
+                    <label class="mem-field"><span>关系状态</span><input class="moment-input" id="pfRelation" maxlength="30"></label>
+                    <label class="mem-field"><span>重要日期（每行：生日 1998-05-20）</span><textarea class="moment-textarea" id="pfKeyDates" rows="3"></textarea></label>
+                    <label class="mem-field"><span>长期目标（每行一个）</span><textarea class="moment-textarea" id="pfGoals" rows="3"></textarea></label>
+                    <label class="mem-field"><span>补充说明</span><textarea class="moment-textarea" id="pfNotes" rows="3"></textarea></label>
+                </div>
+                <div class="fact-editor-actions">
+                    <button class="fact-editor-btn cancel" onclick="closeProfileEditor()">取消</button>
+                    <button class="fact-editor-btn confirm" onclick="saveProfileEditor()">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 记忆条目编辑 -->
+        <div class="dialog-overlay" id="memoryOverlay" onclick="closeMemoryEditor()">
+            <div class="dialog-card mem-edit-card" onclick="event.stopPropagation()">
+                <div class="dialog-title" id="memoryEditorTitle">添加记忆</div>
+                <div class="mem-form" id="memoryForm"></div>
+                <div class="fact-editor-actions">
+                    <button class="fact-editor-btn cancel" onclick="closeMemoryEditor()">取消</button>
+                    <button class="fact-editor-btn confirm" onclick="saveMemoryEditor()">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 角色档案模块编辑 -->
+        <div class="dialog-overlay" id="roleOverlay" onclick="closeRoleEditor()">
+            <div class="dialog-card mem-edit-card" onclick="event.stopPropagation()">
+                <div class="dialog-title" id="roleEditorTitle">编辑角色档案</div>
+                <div class="mem-form">
+                    <label class="mem-field">
+                        <span id="roleEditorDesc">它决定小满是谁、怎么说话</span>
+                        <textarea class="moment-textarea" id="roleEditorText" rows="9"></textarea>
+                    </label>
+                </div>
+                <div class="fact-editor-actions">
+                    <button class="fact-editor-btn cancel" onclick="closeRoleEditor()">取消</button>
+                    <button class="fact-editor-btn confirm" onclick="saveRoleEditor()">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 写回忆信确认 -->
+        <div class="dialog-overlay" id="letterOverlay" onclick="closeLetterDialog()">
+            <div class="dialog-card" onclick="event.stopPropagation()">
+                <div class="dialog-title">写一封回忆信</div>
+                <div class="dialog-info" id="letterDialogInfo"></div>
+                <div class="dialog-question">把这阵子我们一起经历的时光，写成信送到信箱？</div>
+                <div class="dialog-actions">
+                    <button class="dialog-btn cancel" onclick="closeLetterDialog()">再想想</button>
+                    <button class="dialog-btn confirm" onclick="confirmLetter()">写这封信</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../app-config.js"></script>
+    <script src="../native-http.js"></script>
+    <script src="../memory-service.js"></script>
+    <script src="../memory-engine.js"></script>
+    <script src="memory.js"></script>
+</body>
+</html>

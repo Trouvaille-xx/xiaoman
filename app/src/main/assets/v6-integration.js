@@ -39,6 +39,8 @@
 
     // ── switchToExplore ──
     window.switchToExplore = function() {
+        if (typeof closeNoteExpand === 'function') closeNoteExpand();
+        if (typeof closeAllNoteMenus === 'function') closeAllNoteMenus();
         ['notesPage','nianPage','mePage'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         document.getElementById('explorePage').classList.add('active');
         ['navNotes','navNian'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
@@ -128,55 +130,92 @@
         document.getElementById('penpalSheetOverlay').classList.remove('open');
     };
 
-        window.selectPenpal = function(penpalId) {
+    window.selectPenpal = function(penpalId) {
         closePenpalSheet();
         var pp = PENPALS.find(function(p) { return p.id === penpalId; });
         if (!pp || !pendingNoteContent) return;
 
-        // 注入云端 API 配置
-        var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
-        var token = '';
-        try {
-            var raw = typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : '{}';
-            var s = raw ? JSON.parse(raw) : {};
-            token = s.nian_auth_token || '';
-            if (token) {
-                s.apiUrl = backendUrl;
-                s.apiKey = token;
-                s.model = 'deepseek-v4-flash';
-                AndroidSettings.saveSettings(JSON.stringify(s));
-            }
-        } catch(e) {}
+        var plainContent = pendingNoteContent.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+        if (!plainContent) { showToast('笔记内容为空'); return; }
 
-        // 用 Kotlin MailInterface -> MailWorker (后台线程原生 HttpURLConnection)
-        // 清理笔记内容的 HTML 标签
-        var clean = pendingNoteContent
-            .replace(/--isHTML\s*/, '')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<\/p>/gi, '\n')
-            .replace(/<[^>]+>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-            .trim();
-        if (typeof AndroidMail !== 'undefined') {
-            AndroidMail.sendMail(clean, penpalId, pp.name, pp.prompt);
+        // Android 端：交给原生 MailInterface 单次发送（原生负责 3s 延迟 + Worker 回信 + 落库）。
+        // 不要在这里 JS fetch / 二次 saveMailItem —— 旧实现签名不匹配（sendMail 需要 4 个参数），
+        // 且每次调用都会在原生存储里新建一封邮件，导致每封笔友信重复 2 条且回信失败。
+        if (typeof AndroidMail !== 'undefined' && AndroidMail.sendMail) {
+            var memoPrompt = (typeof window.buildPenpalContext === 'function')
+                ? window.buildPenpalContext(penpalId, pp.prompt)
+                : pp.prompt;
+            AndroidMail.sendMail(plainContent.substring(0, 4000), penpalId, pp.name, memoPrompt);
+            showToast('已寄出，等待回信...');
+            setTimeout(updateMailBadge, 4000);
+            return;
         }
-        pendingNoteContent = '';
-        showToast('已寄给 ' + pp.name + '，等待回信');
+
+        // 浏览器端：写 localStorage + fetch 回信
+        var mailId = 'mail_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        var mail = {
+            id: mailId,
+            penpalId: penpalId,
+            noteContent: pendingNoteContent,
+            reply: '',
+            sentAt: Date.now(),
+            status: 'sending',
+            read: false
+        };
+
+        saveMailItem(mail);
+        showToast('已寄出，等待回信...');
+
+        var config;
+        try { config = JSON.parse(localStorage.getItem('nian_settings') || '{}'); } catch(e) { config = {}; }
+        if (!config.apiUrl || !config.apiKey) {
+            mail.status = 'failed';
+            mail.reply = '(请先配置 API)';
+            saveMailItem(mail);
+            updateMailBadge();
+            return;
+        }
+
+        var browserPrompt = (typeof window.buildPenpalContext === 'function')
+            ? window.buildPenpalContext(penpalId, pp.prompt)
+            : pp.prompt;
+
+        var url = NativeHttp.chatEndpoint(config.apiUrl);
+        NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, {
+            model: config.model || 'gpt-4o',
+            messages: [
+                { role: 'system', content: browserPrompt },
+                { role: 'user', content: '我写了一篇笔记，请以你的风格给我回信。笔记内容：\n\n' + plainContent.substring(0, 1000) }
+            ],
+            max_tokens: 400, temperature: 0.8
+        }).then(function(data) {
+            var reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            if (reply) {
+                reply = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '').trim();
+                mail.reply = reply;
+                mail.status = 'replied';
+                mail.repliedAt = Date.now();
+                saveMailItem(mail);
+                updateMailBadge();
+                showToast(pp.name + '回信了');
+            }
+        }).catch(function() {
+            mail.status = 'failed';
+            mail.reply = '(回信失败，请检查网络和API配置)';
+            saveMailItem(mail);
+            updateMailBadge();
+        });
     };
 
     function saveMailItem(mail) {
-        if (typeof AndroidMail !== 'undefined' && AndroidMail.sendMail) {
-            try { AndroidMail.sendMail(JSON.stringify(mail)); } catch(e) {}
-        } else {
-            try {
-                var mails = JSON.parse(localStorage.getItem('nian_mails_cache') || '[]');
-                var found = false;
-                for (var i = 0; i < mails.length; i++) { if (mails[i].id === mail.id) { mails[i] = mail; found = true; break; } }
-                if (!found) mails.unshift(mail);
-                localStorage.setItem('nian_mails_cache', JSON.stringify(mails));
-            } catch(e) {}
-        }
+        // 浏览器端专用：Android 端邮件的写入完全由原生 MailInterface 管理
+        try {
+            var mails = JSON.parse(localStorage.getItem('nian_mails_cache') || '[]');
+            var found = false;
+            for (var i = 0; i < mails.length; i++) { if (mails[i].id === mail.id) { mails[i] = mail; found = true; break; } }
+            if (!found) mails.unshift(mail);
+            localStorage.setItem('nian_mails_cache', JSON.stringify(mails));
+        } catch(e) {}
     }
 
     function getUnreadMailCount() {
@@ -403,6 +442,8 @@
     window.closeNoteExpand = function() {
         document.getElementById('noteExpandViewer').classList.remove('open');
         document.getElementById('noteExpandOverlay').classList.remove('open');
+        document.getElementById('noteExpandBody').innerHTML = '';
+        document.getElementById('noteExpandDate').textContent = '';
         document.body.style.overflow = '';
     };
     // ── Insight Viewer: full-screen with streaming ──
@@ -585,32 +626,48 @@
             '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-family:\'Noto Sans SC\',sans-serif">笔记原文 · 点击展开</div>' +
             '<div class="insight-note-text" id="insightNoteText" style="font-size:13px;color:var(--text-secondary);line-height:1.6;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font-family:\'Noto Serif SC\',serif">' + noteText + '</div>' +
             '</div>' +
-            '<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-family:\'Noto Serif SC\',serif">念念正在思考...</div>';
+            '<div style="text-align:center;padding:20px 0;color:var(--text-muted);font-family:\'Noto Serif SC\',serif">小满正在思考...</div>';
 
-        // Get API config — 注入云端配置
+        // Get API config
         var config;
         try {
-            // 先写入云端 apiUrl/token 到 SharedPreferences
-            var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
-            var raw = typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : null;
-            var s = raw ? JSON.parse(raw) : {};
-            var token = s.nian_auth_token || '';
-            if (token) {
-                s.apiUrl = backendUrl;
-                s.apiKey = token;
-                s.model = 'deepseek-v4-flash';
-                AndroidSettings.saveSettings(JSON.stringify(s));
-            }
             config = JSON.parse(typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : (localStorage.getItem('nian_settings') || '{}'));
         } catch(e) { config = {}; }
         if (!config.apiUrl || !config.apiKey) {
-            document.getElementById('noteExpandBody').innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-muted)">请先在设置中配置 API [' + (token ? 'token OK' : 'no token') + ']</div>';
+            document.getElementById('noteExpandBody').innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text-muted)">请先在设置中配置 API</div>';
             return;
         }
 
-        var url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
+        var url = NativeHttp.chatEndpoint(config.apiUrl);
         var bodyEl = document.getElementById('noteExpandBody');
         var fullText = '';
+
+        // Android 端：原生桥不支持流式，改用一次性请求（无 CORS、不阻塞 UI）；
+        // 浏览器端：保留流式输出体验
+        if (typeof NativeHttp !== 'undefined' && typeof AndroidHttp !== 'undefined') {
+            NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, {
+                model: config.model || 'gpt-4o',
+                messages: [
+                    { role: 'system', content: method.systemPrompt },
+                    { role: 'user', content: '请分析以下笔记内容：\n\n' + plainText }
+                ],
+                max_tokens: 800, temperature: 0.7
+            }).then(function(data) {
+                var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                if (!text) throw new Error('AI 返回为空');
+                text = stripThinkBlocks(text);
+                bodyEl.innerHTML =
+                    '<div class="insight-note-preview" id="insightNotePreview" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:16px;position:relative;cursor:pointer" onclick="toggleInsightNote()">' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-family:\'Noto Sans SC\',sans-serif">笔记原文 · 点击展开</div>' +
+                    '<div class="insight-note-text" id="insightNoteText" style="font-size:13px;color:var(--text-secondary);line-height:1.6;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font-family:\'Noto Serif SC\',serif">' + noteText + '</div>' +
+                    '</div>' +
+                    '<div class="insight-stream-content" id="insightStreamContent" style="font-family:\'Noto Serif SC\',serif;font-size:15px;line-height:1.9;color:var(--text)">' + (renderMarkdown(text) || '(暂无内容)') + '</div>';
+                saveInsightHistory({ at: Date.now(), methodId: methodId, methodName: method.name, noteId: noteId, noteContent: noteText, notePreview: noteText.substring(0, 80), result: text });
+            }).catch(function(e) {
+                bodyEl.innerHTML = '<div style="text-align:center;padding:40px 0;color:#c0392b">请求失败: ' + e.message + '</div>';
+            });
+            return;
+        }
 
         fetch(url, {
             method: 'POST',
@@ -642,7 +699,7 @@
                     if (result.done) {
                         var clean = stripThinkBlocks(fullText);
                         if (!document.getElementById('insightStreamContent')) {
-                            bodyEl.innerHTML = bodyEl.innerHTML.replace('念念正在思考...', '');
+                            bodyEl.innerHTML = bodyEl.innerHTML.replace('小满正在思考...', '');
                             bodyEl.innerHTML += '<div class="insight-stream-content" id="insightStreamContent" style="font-family:\'Noto Serif SC\',serif;font-size:15px;line-height:1.9;color:var(--text)"></div>';
                         }
                         document.getElementById('insightStreamContent').innerHTML = renderMarkdown(clean) || '(暂无内容)';
@@ -754,7 +811,6 @@
             }).join('');
         }
         updateDrawerActive('insight');
-        history.pushState({ page: 'insightHub' }, '', '#insightHub');
     };
 
     // ── Method Editor Popup ──
@@ -995,18 +1051,6 @@
     // Year bar always visible
     setTimeout(function() { updateYearBar(); updateHeaderMeta(); }, 300);
 
-    // Show header briefly on first load as a hint, then hide
-    setTimeout(function() {
-        if (headerEl && !hasScrolled) {
-            headerEl.classList.add('revealed');
-            updateHeaderMeta();
-            updateYearBar();
-            setTimeout(function() {
-                if (!hasScrolled && headerEl) headerEl.classList.remove('revealed');
-            }, 2000);
-        }
-    }, 800);
-
     if (contentEl) {
         contentEl.addEventListener('scroll', function() {
             updateYearBar();
@@ -1015,8 +1059,8 @@
                 if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
                 if (headerEl) headerEl.classList.remove('revealed');
             }
-            // Reveal on pull to top
-            if (contentEl.scrollTop <= 10 && headerEl && !headerEl.classList.contains('revealed')) {
+            // Reveal on pull to top (more generous threshold)
+            if (contentEl.scrollTop <= 10 && hasScrolled && headerEl && !headerEl.classList.contains('revealed')) {
                 if (!revealTimer) revealTimer = setTimeout(function() {
                     headerEl.classList.add('revealed');
                     updateHeaderMeta();
@@ -1050,23 +1094,6 @@
         }, {passive: true});
     }
 
-    // Monkey-patch enterInsightModeUI: keep its exit button, don't duplicate
-    var _origEnterInsightModeUI = enterInsightModeUI;
-    window.enterInsightModeUI = function() {
-        _origEnterInsightModeUI();
-    };
-
-    // Restore island + icons when exiting insight mode
-    var _origExitInsightMode = exitInsightMode;
-    window.exitInsightMode = function() {
-        _origExitInsightMode();
-        var bn = document.querySelector('.bottom-nav'); if (bn) bn.style.display = '';
-        var hr = document.getElementById('headerRight'); if (hr) hr.style.display = '';
-        var hi = document.getElementById('historyIcon'); if (hi) hi.style.display = '';
-        var hamburger = document.querySelector('#appHeader .header-icon');
-        if (hamburger) hamburger.style.display = '';
-    };
-
     var expandObserver = new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
             if (entry.isIntersecting) {
@@ -1078,23 +1105,6 @@
             }
         });
     }, { rootMargin: '0px 0px 200px 0px' });
-
-    // Monkey-patch: chat 深度洞察 → full flow with scenarios + note picker
-    var _origEnterInsightMode = enterInsightMode;
-    window.enterInsightMode = function() {
-        var bn = document.querySelector('.bottom-nav'); if (bn) bn.style.display = 'none';
-        var hr = document.getElementById('headerRight'); if (hr) hr.style.display = 'none';
-        var hi = document.getElementById('historyIcon'); if (hi) hi.style.display = 'none';
-        var hamburger = document.querySelector('#appHeader .header-icon');
-        if (hamburger) hamburger.style.display = 'none';
-        _origEnterInsightMode();
-    };
-
-    window.exitDeepInsight = function() {
-        var bn = document.querySelector('.bottom-nav'); if (bn) bn.style.display = '';
-        if (typeof exitInsightMode === 'function') exitInsightMode();
-        if (typeof switchToNian === 'function') switchToNian();
-    };
 
     setTimeout(function() {
         document.querySelectorAll('.notes-section.collapsed .notes-section-header').forEach(function(h) {
@@ -1153,7 +1163,7 @@
     }
 
     window.editMeAvatar = function() {
-        var avatars = ['念','风','月','光','静','暖','心','星','梦','云','花','雨','雪','山','海','空'];
+        var avatars = ['我','风','月','光','静','暖','心','星','梦','云','花','雨','雪','山','海','空'];
         var cur = document.getElementById('meAvatar').textContent.trim();
         var idx = avatars.indexOf(cur);
         idx = (idx + 1) % avatars.length;

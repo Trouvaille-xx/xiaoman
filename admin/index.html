@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小满 · Win 后台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #f5f3ee; color: #3d362c; }
+  header { background: #e85d04; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .sub { font-size: 12px; opacity: .85; }
+  nav { display: flex; gap: 4px; padding: 0 24px; background: #fff; border-bottom: 1px solid #e8e2d8; }
+  nav button { border: none; background: none; padding: 12px 18px; font-size: 14px; color: #6b6155; cursor: pointer; border-bottom: 2px solid transparent; }
+  nav button.active { color: #e85d04; border-bottom-color: #e85d04; font-weight: 600; }
+  main { padding: 20px 24px; max-width: 900px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: #fff; border: 1px solid #e8e2d8; border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .card h3 { font-size: 14px; margin-bottom: 12px; color: #e85d04; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #eee; }
+  .row:last-child { border-bottom: none; }
+  .row .name { flex: 0 0 160px; font-size: 13px; font-weight: 600; }
+  .row .desc { flex: 1; font-size: 12px; color: #8a8274; }
+  .row .cat { font-size: 11px; color: #b5ad9e; width: 40px; }
+  label { font-size: 13px; display: block; margin: 10px 0 4px; color: #6b6155; }
+  input[type=text], input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid #ddd6c8; border-radius: 6px; font-size: 13px; }
+  textarea { width: 100%; padding: 8px 10px; border: 1px solid #ddd6c8; border-radius: 6px; font-size: 13px; font-family: "Microsoft YaHei", monospace; line-height: 1.6; resize: vertical; min-height: 90px; }
+  button.action { background: #e85d04; color: #fff; border: none; padding: 9px 22px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  button.action:hover { background: #d35400; }
+  button.ghost { background: #fff; color: #6b6155; border: 1px solid #ddd6c8; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  button.ghost:hover { border-color: #e85d04; color: #e85d04; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .hint { font-size: 12px; color: #b5ad9e; margin-top: 8px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2e7d32; color: #fff; padding: 10px 22px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .log-item { border-bottom: 1px dashed #eee; padding: 8px 0; font-size: 12px; }
+  .log-item .t { color: #b5ad9e; margin-right: 8px; }
+  .log-item .ok { color: #2e7d32; } .log-item .fail { color: #c0392b; }
+  .log-item .steps { color: #8a8274; margin-top: 4px; }
+  .switch { position: relative; width: 40px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #ddd6c8; border-radius: 22px; transition: .2s; }
+  .slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: #e85d04; }
+  input:checked + .slider:before { transform: translateX(18px); }
+  .insight-item { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  .insight-item .head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .insight-item .head input { flex: 1; }
+  .insight-item .head .del { color: #c0392b; cursor: pointer; font-size: 16px; border: none; background: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>小满 · Win 后台</h1>
+  <span class="sub">提示词 / 工具 / 遥测管理 · 导出后客户端生效</span>
+</header>
+<nav>
+  <button data-tab="tools" class="active">工具开关</button>
+  <button data-tab="prompts">默认提示词</button>
+  <button data-tab="insight">洞察模式</button>
+  <button data-tab="model">模型与遥测</button>
+  <button data-tab="logs">执行日志</button>
+</nav>
+<main>
+  <div class="panel active" id="panel-tools">
+    <div class="card">
+      <h3>工具启用管理（导出后，客户端只注册勾选中的工具）</h3>
+      <div id="toolList"></div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="ghost" onclick="toolsAll(true)">全选</button>
+        <button class="ghost" onclick="toolsAll(false)">全不选</button>
+        <span style="flex:1"></span>
+        <button class="action" onclick="saveConfig()">保存配置</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-prompts">
+    <div class="card">
+      <h3>人设默认值（留空 = 使用客户端内置；导出后对新装的记忆生效）</h3>
+      <div id="defaultsEditor"></div>
+    </div>
+    <div class="card">
+      <h3>任务提示词（记忆提取 / 记忆整理，支持 {soul} {user} 占位符）</h3>
+      <label>记忆提取提示词</label><textarea id="taskExtract" rows="6"></textarea>
+      <label>记忆整理（dreaming）提示词</label><textarea id="taskDream" rows="8"></textarea>
+      <div class="toolbar" style="margin-top:12px">
+        <span style="flex:1"></span>
+        <button class="action" onclick="saveConfig()">保存配置</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>笔友回信提示词（留空 = 使用内置）</h3>
+      <div id="penpalEditor"></div>
+      <div class="toolbar" style="margin-top:12px">
+        <span style="flex:1"></span>
+        <button class="action" onclick="saveConfig()">保存配置</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-insight">
+    <div class="card">
+      <h3>洞察模式（优先级：用户在 app 内自定义 &gt; 本后台配置 &gt; 客户端内置）</h3>
+      <div class="toolbar">
+        <button class="ghost" onclick="loadInsightDefaults()">从客户端内置加载</button>
+        <button class="ghost" onclick="addInsight()">+ 新增模式</button>
+        <span style="flex:1"></span>
+        <button class="action" onclick="saveConfig()">保存配置</button>
+      </div>
+      <div id="insightList"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-model">
+    <div class="card">
+      <h3>默认模型</h3>
+      <label>默认模型名称（客户端未设置时使用）</label>
+      <input type="text" id="modelDefault">
+      <label>配图模型（图像生成用，如 gpt-image-2）</label>
+      <input type="text" id="modelImage">
+      <div class="toolbar" style="margin-top:12px">
+        <span style="flex:1"></span>
+        <button class="action" onclick="saveConfig()">保存配置</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>遥测上报</h3>
+      <label>日志接收地址（客户端浏览器模式直接上报；Android 端走原生桥）</label>
+      <input type="text" id="telemetryUrl">
+      <div class="hint">Windows 防火墙需放行 8787 端口；Android 真机需改为局域网 IP（如 http://192.168.x.x:8787/api/logs）</div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-logs">
+    <div class="card">
+      <h3>最近执行日志（自动刷新 5s）</h3>
+      <div id="logList"></div>
+    </div>
+  </div>
+
+  <div class="toolbar" style="position:sticky;bottom:0;background:#f5f3ee;padding:12px 0">
+    <span style="flex:1"></span>
+    <button class="ghost" onclick="exportConfig()">仅保存配置</button>
+    <button class="action" onclick="exportToApp()">保存并导出到 App</button>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+let cfg = null;
+const DEFAULTS_KEYS = ['identity', 'soul', 'user', 'tools', 'memory', 'heartbeat'];
+const DEFAULT_LABELS = { identity: '身份', soul: '灵魂', user: '用户', tools: '工具', memory: '记忆', heartbeat: '心跳' };
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+// ── Tab 切换 ──
+document.querySelectorAll('nav button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('nav button').forEach((x) => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('panel-' + b.dataset.tab).classList.add('active');
+  };
+});
+
+// ── 加载配置 ──
+async function loadConfig() {
+  cfg = await api('/api/config');
+  renderTools();
+  renderDefaults();
+  renderTasks();
+  renderPenpals();
+  renderInsight();
+  document.getElementById('modelDefault').value = cfg.model.defaultModel || '';
+  document.getElementById('modelImage').value = (cfg.model && cfg.model.imageModel) || '';
+  document.getElementById('telemetryUrl').value = cfg.telemetry.url || '';
+}
+
+// ── 工具 ──
+function renderTools() {
+  const enabled = Array.isArray(cfg.tools.enabled) ? cfg.tools.enabled : null;
+  const list = document.getElementById('toolList');
+  list.innerHTML = '';
+  (cfg.tools.catalog || []).forEach((t) => {
+    const on = enabled ? enabled.indexOf(t.name) !== -1 : true;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span class="cat">' + escapeHtml(t.category || '') + '</span>' +
+      '<span class="name">' + escapeHtml(t.name) + '</span>' +
+      '<span class="desc">' + escapeHtml(t.desc || '') + '</span>' +
+      '<label class="switch"><input type="checkbox" data-tool="' + escapeHtml(t.name) + '"' + (on ? ' checked' : '') + '><span class="slider"></span></label>';
+    list.appendChild(row);
+  });
+}
+
+function toolsAll(on) {
+  document.querySelectorAll('#toolList input[type=checkbox]').forEach((c) => { c.checked = on; });
+}
+
+function collectTools() {
+  const enabled = [];
+  document.querySelectorAll('#toolList input[type=checkbox]').forEach((c) => {
+    if (c.checked) enabled.push(c.dataset.tool);
+  });
+  cfg.tools.enabled = enabled;
+}
+
+// ── 人设默认值 ──
+function renderDefaults() {
+  const el = document.getElementById('defaultsEditor');
+  el.innerHTML = '';
+  DEFAULTS_KEYS.forEach((k) => {
+    const label = document.createElement('label');
+    label.textContent = DEFAULT_LABELS[k] + ' (' + k + ')';
+    const ta = document.createElement('textarea');
+    ta.id = 'def_' + k;
+    ta.rows = 4;
+    ta.placeholder = '留空 = 使用客户端内置默认';
+    ta.value = (cfg.prompts.defaults && cfg.prompts.defaults[k]) || '';
+    el.appendChild(label);
+    el.appendChild(ta);
+  });
+}
+
+// ── 任务提示词 ──
+function renderTasks() {
+  document.getElementById('taskExtract').value = (cfg.prompts.tasks && cfg.prompts.tasks.extractSystem) || '';
+  document.getElementById('taskDream').value = (cfg.prompts.tasks && cfg.prompts.tasks.dreamSystem) || '';
+}
+
+// ── 笔友 ──
+function renderPenpals() {
+  const el = document.getElementById('penpalEditor');
+  el.innerHTML = '';
+  const names = { xiaonuan: '小暖', aran: '阿燃', shubai: '书白', momo: '墨墨' };
+  Object.keys(names).forEach((k) => {
+    const label = document.createElement('label');
+    label.textContent = names[k] + '（' + k + '）';
+    const ta = document.createElement('textarea');
+    ta.id = 'pp_' + k;
+    ta.rows = 3;
+    ta.placeholder = '留空 = 使用内置';
+    ta.value = (cfg.prompts.penpals && cfg.prompts.penpals[k]) || '';
+    el.appendChild(label);
+    el.appendChild(ta);
+  });
+}
+
+// ── 洞察 ──
+function renderInsight() {
+  const list = document.getElementById('insightList');
+  list.innerHTML = '';
+  (cfg.prompts.insight || []).forEach((p, i) => {
+    list.appendChild(insightItem(p, i));
+  });
+}
+
+function insightItem(p, i) {
+  const div = document.createElement('div');
+  div.className = 'insight-item';
+  div.innerHTML = '<div class="head">' +
+    '<input type="text" placeholder="id" data-f="id" value="' + escapeHtml(p.id || '') + '">' +
+    '<input type="text" placeholder="名称" data-f="name" value="' + escapeHtml(p.name || '') + '">' +
+    '<button class="del" title="删除">✕</button></div>' +
+    '<input type="text" placeholder="一句话描述" data-f="desc" value="' + escapeHtml(p.desc || '') + '" style="margin-bottom:6px">' +
+    '<textarea placeholder="系统提示词" data-f="systemPrompt" rows="4">' + escapeHtml(p.systemPrompt || '') + '</textarea>';
+  div.querySelector('.del').onclick = () => {
+    cfg.prompts.insight.splice(i, 1);
+    renderInsight();
+  };
+  div.querySelectorAll('[data-f]').forEach((inp) => {
+    inp.oninput = () => {
+      const idx = Array.prototype.indexOf.call(div.parentNode.children, div);
+      if (idx >= 0 && cfg.prompts.insight[idx]) {
+        cfg.prompts.insight[idx][inp.dataset.f] = inp.value;
+      }
+    };
+  });
+  return div;
+}
+
+function addInsight() {
+  if (!cfg.prompts.insight) cfg.prompts.insight = [];
+  cfg.prompts.insight.push({ id: 'mode_' + Date.now(), name: '新模式', desc: '', systemPrompt: '' });
+  renderInsight();
+}
+
+async function loadInsightDefaults() {
+  const r = await api('/api/insight-defaults');
+  if (r.insight && r.insight.length) {
+    cfg.prompts.insight = r.insight;
+    renderInsight();
+    toast('已加载 ' + r.insight.length + ' 个内置模式，可修改后保存');
+  } else {
+    toast('未能读取内置模式');
+  }
+}
+
+// ── 保存 ──
+function collectConfig() {
+  collectTools();
+  DEFAULTS_KEYS.forEach((k) => {
+    cfg.prompts.defaults[k] = document.getElementById('def_' + k).value;
+  });
+  cfg.prompts.tasks.extractSystem = document.getElementById('taskExtract').value;
+  cfg.prompts.tasks.dreamSystem = document.getElementById('taskDream').value;
+  ['xiaonuan', 'aran', 'shubai', 'momo'].forEach((k) => {
+    cfg.prompts.penpals[k] = document.getElementById('pp_' + k).value;
+  });
+  cfg.model.defaultModel = document.getElementById('modelDefault').value.trim();
+  cfg.model.imageModel = document.getElementById('modelImage').value.trim();
+  cfg.telemetry.url = document.getElementById('telemetryUrl').value.trim();
+}
+
+async function saveConfig() {
+  collectConfig();
+  const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+  if (r.ok) toast('配置已保存');
+  else toast('保存失败: ' + (r.error || ''));
+}
+
+async function exportConfig() {
+  await saveConfig();
+}
+
+async function exportToApp() {
+  collectConfig();
+  const r1 = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+  if (!r1.ok) { toast('保存失败'); return; }
+  const r2 = await api('/api/export', { method: 'POST' });
+  if (r2.ok) toast('已导出 app-config.js (' + r2.size + ' B)，刷新 App 生效');
+  else toast('导出失败: ' + (r2.error || ''));
+}
+
+// ── 日志 ──
+async function refreshLogs() {
+  const r = await api('/api/logs?limit=50');
+  const list = document.getElementById('logList');
+  if (!r.logs) return;
+  list.innerHTML = '';
+  r.logs.slice().reverse().forEach((l) => {
+    const div = document.createElement('div');
+    div.className = 'log-item';
+    const t = new Date(l.ts).toLocaleString('zh-CN', { hour12: false });
+    const status = l.ok ? '<span class="ok">✓ 成功</span>' : '<span class="fail">✗ 失败' + (l.error ? ' ' + escapeHtml(l.error) : '') + '</span>';
+    const steps = (l.steps || []).map((s) => {
+      if (s.type === 'tool_call') return '⚙️' + escapeHtml(s.name);
+      if (s.type === 'tool_result') return s.ok ? '✓' + escapeHtml(s.name) : '✗' + escapeHtml(s.name);
+      if (s.type === 'summary') return '🧠总结';
+      if (s.type === 'llm_retry') return '🔄重试';
+      return '';
+    }).join(' ');
+    div.innerHTML = '<span class="t">' + t + '</span>' + status +
+      (l.convId ? ' <span class="t">' + escapeHtml(l.convId) + '</span>' : '') +
+      (steps ? '<div class="steps">' + steps + '</div>' : '') +
+      (l.summaryCount ? '<div class="steps">摘要次数: ' + l.summaryCount + '</div>' : '');
+    list.appendChild(div);
+  });
+}
+
+loadConfig();
+setInterval(refreshLogs, 5000);
+</script>
+</body>
+</html>

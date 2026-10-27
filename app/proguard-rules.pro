@@ -1,1 +1,1 @@
-# ProGuard rules for NianNote
+# ProGuard rules for xiaoman

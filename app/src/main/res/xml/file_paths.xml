@@ -3,4 +3,6 @@
     <!-- 把 context.filesDir/images/ 暴露为 content://...fileprovider/images/ -->
     <files-path name="images" path="images/" />
     <files-path name="thumbs" path="thumbs/" />
+    <!-- App 内自更新下载的安装包：cacheDir/apk/ -->
+    <cache-path name="apk" path="apk/" />
 </paths>

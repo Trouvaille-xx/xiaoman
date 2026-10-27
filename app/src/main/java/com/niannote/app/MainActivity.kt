@@ -1,11 +1,8 @@
 package com.niannote.app
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
@@ -18,11 +15,11 @@ import android.webkit.WebViewClient
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import androidx.room.withTransaction
 import com.niannote.app.data.AppDatabase
 import com.niannote.app.data.ImageEntity
 import com.niannote.app.data.ImageFileManager
@@ -40,7 +37,6 @@ class MainActivity : AppCompatActivity() {
     private val storageKey = "nian_notes_data"
     private val settingsKey = "nian_settings"
     private val mailsKey = "nian_mails"
-    private val authKey = "nian_auth"
 
     private var lastTop = 0
     private var lastBottom = 0
@@ -50,18 +46,58 @@ class MainActivity : AppCompatActivity() {
     private val database by lazy { AppDatabase.getInstance(this) }
     private val imageManager by lazy { ImageFileManager(this) }
 
-    private val permissionLauncher: ActivityResultLauncher<String> =
-            registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-                if (granted && pendingFileCallback != null) {
-                    launchFileChooser()
+    private val fileChooserLauncher: ActivityResultLauncher<Intent> =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK && result.data != null) {
+                    val data = result.data
+                    val results = mutableListOf<Uri>()
+                    val clipData = data?.clipData
+                    if (clipData != null) {
+                        for (i in 0 until clipData.itemCount) {
+                            results.add(clipData.getItemAt(i).uri)
+                        }
+                    } else {
+                        data?.data?.let { results.add(it) }
+                    }
+                    pendingFileCallback?.onReceiveValue(results.toTypedArray())
                 } else {
                     pendingFileCallback?.onReceiveValue(null)
-                    pendingFileCallback = null
                 }
+                pendingFileCallback = null
             }
 
     companion object {
-        private const val FILE_CHOOSER_REQUEST = 1001
+        private const val MAX_MAILS = 500
+
+        private val UTC_FORMAT: java.text.SimpleDateFormat by lazy {
+            java.text.SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                    java.util.Locale.US
+            ).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        }
+
+        /** 时间戳 ID 防同毫秒碰撞的随机后缀。 */
+        fun randomSuffix(): String {
+            return java.util.UUID.randomUUID().toString().substring(0, 6)
+        }
+
+        /** JS new Date().toISOString() 产出 UTC，这里显式按 UTC 解析，避免本地时区偏移。 */
+        fun parseUtc(ts: String): Long? {
+            return try {
+                UTC_FORMAT.parse(ts)?.time
+            } catch (e: Exception) {
+                // 兜底：毫秒缺失等变体
+                try {
+                    java.text.SimpleDateFormat(
+                            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                            java.util.Locale.US
+                    ).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                            .parse(ts)?.time
+                } catch (e2: Exception) {
+                    null
+                }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,21 +135,8 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(FileInterface(this), "AndroidFile")
         webView.addJavascriptInterface(ImageInterface(this), "AndroidImage")
         webView.addJavascriptInterface(HttpInterface(), "AndroidHttp")
-        webView.addJavascriptInterface(ApiInterface(), "AndroidApi")
-        webView.addJavascriptInterface(AuthInterface(this), "AndroidAuth")
-        webView.loadUrl("file:///android_asset/app.html")
-        injectBackendConfig()
-    }
-
-    private fun injectBackendConfig() {
-        // 把后端地址注入到 WebView 全局，JS 端通过 window.__NianBackend.url 访问
-        val url = BuildConfig.BACKEND_URL.replace("'", "\\'")
-        webView.post {
-            webView.evaluateJavascript(
-                "window.__NianBackend = { url: '$url' };",
-                null
-            )
-        }
+        webView.addJavascriptInterface(UpdateInterface(this), "AndroidUpdate")
+        webView.loadUrl("https://appassets.androidplatform.net/assets/app.html")
     }
 
     private fun applySafeInsets() {
@@ -141,6 +164,8 @@ class MainActivity : AppCompatActivity() {
         // WebViewAssetLoader：把 filesDir/images/ 暴露为 https://appassets.androidplatform.net/images/
         // 这是 Android 官方推荐的本地文件给 WebView 的方式，比 content:// FileProvider 更可靠
         val assetLoader = WebViewAssetLoader.Builder()
+                // /assets/ 走热更新处理器(hotfix 目录优先，APK assets 兜底)
+                .addPathHandler("/assets/", HotfixAssetHandler(this))
                 .addPathHandler("/images/", WebViewAssetLoader.InternalStoragePathHandler(
                         this, File(filesDir, "images")
                 ))
@@ -160,6 +185,29 @@ class MainActivity : AppCompatActivity() {
                     ): WebResourceResponse? {
                         return assetLoader.shouldInterceptRequest(request.url)
                                 ?: super.shouldInterceptRequest(view, request)
+                    }
+
+                    // 安全：禁止 WebView 内导航到远程页面（远程页面可访问全部 JS Bridge，
+                    // 包括含 API Key 的设置）。http/https 一律转系统浏览器打开。
+                    override fun shouldOverrideUrlLoading(
+                            view: WebView,
+                            request: WebResourceRequest
+                    ): Boolean {
+                        val url = request.url ?: return false
+                        val scheme = url.scheme ?: return false
+                        if (scheme == "http" || scheme == "https") {
+                            // 本地资源域(appassets)放行，交给 shouldInterceptRequest；
+                            // 远程 http(s) 页面仍然一律转系统浏览器，防止访问 JS Bridge
+                            if (url.host == "appassets.androidplatform.net") return false
+                            try {
+                                startActivity(Intent(Intent.ACTION_VIEW, url))
+                            } catch (e: Exception) {
+                                // 无可用浏览器时放行，避免死链
+                                return false
+                            }
+                            return true
+                        }
+                        return false
                     }
                 }
         webView.webChromeClient =
@@ -188,38 +236,16 @@ class MainActivity : AppCompatActivity() {
                 type = "*/*"
                 putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/html", "text/plain"))
             }
-            startActivityForResult(Intent.createChooser(intent, "选择文件"), FILE_CHOOSER_REQUEST)
+            fileChooserLauncher.launch(Intent.createChooser(intent, "选择文件"))
         } else {
-            checkAndRequestPermission()
+            // ACTION_GET_CONTENT 无需任何存储权限
+            val intent =
+                    Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = "image/*"
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+            fileChooserLauncher.launch(Intent.createChooser(intent, "选择图片"))
         }
-    }
-
-    private fun checkAndRequestPermission() {
-        val permission =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    Manifest.permission.READ_MEDIA_IMAGES
-                } else {
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                }
-
-        when {
-            ContextCompat.checkSelfPermission(this, permission) ==
-                    PackageManager.PERMISSION_GRANTED -> {
-                launchImageChooser()
-            }
-            else -> {
-                permissionLauncher.launch(permission)
-            }
-        }
-    }
-
-    private fun launchImageChooser() {
-        val intent =
-                Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "image/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                }
-        startActivityForResult(Intent.createChooser(intent, "选择图片"), FILE_CHOOSER_REQUEST)
     }
 
     override fun onBackPressed() {
@@ -227,27 +253,6 @@ class MainActivity : AppCompatActivity() {
             webView.goBack()
         } else {
             super.onBackPressed()
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == FILE_CHOOSER_REQUEST) {
-            if (resultCode == RESULT_OK && data != null) {
-                val results = mutableListOf<Uri>()
-                val clipData = data.clipData
-                if (clipData != null) {
-                    for (i in 0 until clipData.itemCount) {
-                        results.add(clipData.getItemAt(i).uri)
-                    }
-                } else {
-                    data.data?.let { results.add(it) }
-                }
-                pendingFileCallback?.onReceiveValue(results.toTypedArray())
-            } else {
-                pendingFileCallback?.onReceiveValue(null)
-            }
-            pendingFileCallback = null
         }
     }
 
@@ -297,8 +302,11 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
 
-                    database.noteDao().deleteAll()
-                    database.noteDao().insertAll(notes)
+                    // 事务内整体替换，避免并发 sync 时 deleteAll/insertAll 交错导致镜像丢失
+                    database.withTransaction {
+                        database.noteDao().deleteAll()
+                        database.noteDao().insertAll(notes)
+                    }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -322,14 +330,7 @@ class MainActivity : AppCompatActivity() {
         private fun parseTimestamp(ts: String): Long {
             return try {
                 if (ts.isEmpty()) System.currentTimeMillis()
-                else
-                        java.text.SimpleDateFormat(
-                                        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-                                        java.util.Locale.US
-                                )
-                                .parse(ts)
-                                ?.time
-                                ?: System.currentTimeMillis()
+                else parseUtc(ts) ?: System.currentTimeMillis()
             } catch (e: Exception) {
                 System.currentTimeMillis()
             }
@@ -460,76 +461,134 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class HttpInterface {
+        private val maxResponseBytes = 2 * 1024 * 1024
+        private val httpExecutor = java.util.concurrent.Executors.newCachedThreadPool()
+
+        private fun buildConnection(url: String, method: String, connectTimeout: Int, readTimeout: Int): java.net.HttpURLConnection {
+            val parsed = java.net.URL(url)
+            // 白名单：只允许 http/https，杜绝 file:/content: 等本地文件访问
+            val scheme = parsed.protocol
+            if (scheme != "http" && scheme != "https") {
+                throw IllegalArgumentException("blocked scheme: $scheme")
+            }
+            val connection = parsed.openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = method
+            connection.setRequestProperty("User-Agent", "xiaoman/1.0")
+            connection.connectTimeout = connectTimeout
+            connection.readTimeout = readTimeout
+            return connection
+        }
+
+        private fun readLimited(stream: java.io.InputStream): String {
+            val buffer = java.io.ByteArrayOutputStream()
+            val chunk = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val n = stream.read(chunk)
+                if (n < 0) break
+                total += n
+                if (total > maxResponseBytes) {
+                    throw RuntimeException("response too large (> ${maxResponseBytes / 1024}KB)")
+                }
+                buffer.write(chunk, 0, n)
+            }
+            return String(buffer.toByteArray(), Charsets.UTF_8)
+        }
+
+        private fun errorJson(e: Exception): String {
+            // 用 JSONObject 转义，避免 message 中的引号/反斜杠破坏 JSON
+            return JSONObject().put("error", e.message ?: "unknown error").toString()
+        }
+
+        private fun getImpl(url: String): JSONObject {
+            val connection = buildConnection(url, "GET", 10000, 10000)
+            try {
+                val text = readLimited(connection.inputStream)
+                return JSONObject().put("ok", true).put("data", text)
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        private fun postImpl(url: String, headersJson: String, body: String): JSONObject {
+            val connection = buildConnection(url, "POST", 30000, 60000)
+            try {
+                connection.setRequestProperty("Content-Type", "application/json")
+                val headers = JSONObject(headersJson)
+                val keys = headers.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    connection.setRequestProperty(key, headers.optString(key))
+                }
+                connection.doOutput = true
+                java.io.OutputStreamWriter(connection.outputStream, "UTF-8").use { it.write(body) }
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val text = if (stream != null) readLimited(stream) else ""
+                return JSONObject()
+                        .put("ok", true)
+                        .put("status", status)
+                        .put("data", text)
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        /** 在 UI 线程回调 JS：window.NativeHttp.__onResponse(callbackId, payload) */
+        private fun postToJs(expr: String) {
+            try {
+                webView.post { webView.evaluateJavascript(expr, null) }
+            } catch (e: Exception) {
+                // Activity 已销毁等场景，静默丢弃
+            }
+        }
+
         @JavascriptInterface
         fun get(url: String): String {
             return try {
-                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("User-Agent", "curl/8.0")
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-                val reader = java.io.BufferedReader(java.io.InputStreamReader(connection.inputStream, "UTF-8"))
-                val text = reader.readText()
-                reader.close()
-                text
+                getImpl(url).toString()
             } catch (e: Exception) {
-                "{\"error\":\"${e.message}\"}"
+                errorJson(e)
             }
         }
-    }
 
-    // ─── ApiInterface: POST + 自定义 Header，给后端 API 用 ───
-    inner class ApiInterface {
         @JavascriptInterface
-        fun post(url: String, body: String, authToken: String): String {
+        fun post(url: String, headersJson: String, body: String): String {
             return try {
-                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.setRequestProperty("Authorization", "Bearer $authToken")
-                connection.setRequestProperty("User-Agent", "NianAndroid/1.0")
-                connection.connectTimeout = 15000
-                connection.readTimeout = 60000
-                connection.doOutput = true
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-                val status = connection.responseCode
-                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-                val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
-                // 返回 {status, body} 让 JS 判断 HTTP 状态
-                "{\"status\":$status,\"body\":${JSONObject.quote(text)}}"
+                postImpl(url, headersJson, body).toString()
             } catch (e: Exception) {
-                "{\"status\":0,\"body\":${JSONObject.quote("{\"error\":\"${e.message}\"}")}}"
+                JSONObject()
+                        .put("status", 0)
+                        .put("body", "")
+                        .put("error", e.message ?: "unknown error")
+                        .toString()
             }
         }
-    }
 
-    // ─── AuthInterface: 存/读 JWT token ───
-    inner class AuthInterface(private val context: Context) {
+        /** 异步 GET：后台线程执行，完成后回调 JS。避免同步桥阻塞 WebView JS 线程。 */
         @JavascriptInterface
-        fun getAuthJson(): String {
-            val prefs = context.getSharedPreferences(authKey, android.content.Context.MODE_PRIVATE)
-            val token = prefs.getString("token", "") ?: ""
-            val userId = prefs.getString("user_id", "") ?: ""
-            val username = prefs.getString("username", "") ?: ""
-            return "{\"token\":\"${token}\",\"user_id\":\"${userId}\",\"username\":\"${username}\"}"
+        fun getAsync(url: String, callbackId: String) {
+            httpExecutor.execute {
+                val payload = try {
+                    getImpl(url)
+                } catch (e: Exception) {
+                    JSONObject().put("ok", false).put("error", e.message ?: "unknown error")
+                }
+                postToJs("window.NativeHttp && window.NativeHttp.__onResponse(${JSONObject.quote(callbackId)}, ${payload.toString()})")
+            }
         }
 
+        /** 异步 POST：后台线程执行，完成后回调 JS。 */
         @JavascriptInterface
-        fun saveAuth(token: String, userId: String, username: String) {
-            context.getSharedPreferences(authKey, android.content.Context.MODE_PRIVATE)
-                .edit()
-                .putString("token", token)
-                .putString("user_id", userId)
-                .putString("username", username)
-                .apply()
-        }
-
-        @JavascriptInterface
-        fun clearAuth() {
-            context.getSharedPreferences(authKey, android.content.Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .apply()
+        fun postAsync(url: String, headersJson: String, body: String, callbackId: String) {
+            httpExecutor.execute {
+                val payload = try {
+                    postImpl(url, headersJson, body)
+                } catch (e: Exception) {
+                    JSONObject().put("ok", false).put("error", e.message ?: "unknown error")
+                }
+                postToJs("window.NativeHttp && window.NativeHttp.__onResponse(${JSONObject.quote(callbackId)}, ${payload.toString()})")
+            }
         }
     }
 
@@ -567,6 +626,8 @@ class MainActivity : AppCompatActivity() {
 
     inner class MailInterface(private val context: Context) {
 
+        private val mailWorkerExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
         @JavascriptInterface
         fun sendMail(
                 noteContent: String,
@@ -574,7 +635,7 @@ class MainActivity : AppCompatActivity() {
                 penpalName: String,
                 systemPrompt: String
         ) {
-            val mailId = "mail_" + System.currentTimeMillis().toString()
+            val mailId = "mail_" + System.currentTimeMillis().toString() + "_" + randomSuffix()
             val prefs = context.getSharedPreferences(mailsKey, Context.MODE_PRIVATE)
             val raw = prefs.getString("mails", "[]") ?: "[]"
             val mails = JSONArray(raw)
@@ -594,18 +655,45 @@ class MainActivity : AppCompatActivity() {
             mails.put(mail)
             prefs.edit().putString("mails", mails.toString()).apply()
 
-            Thread {
-                        Thread.sleep(3000)
-                        MailWorker.execute(
-                                context,
-                                mailId,
-                                noteContent,
-                                penpalId,
-                                penpalName,
-                                systemPrompt
-                        )
+            mailWorkerExecutor.execute {
+                Thread.sleep(3000)
+                MailWorker.execute(
+                        context.applicationContext,
+                        mailId,
+                        noteContent,
+                        penpalId,
+                        penpalName,
+                        systemPrompt
+                )
+            }
+        }
+
+        /** 按 id 插入或更新一封邮件。供 JS 端（主动消息/回信更新）写入，与 Worker 写入共用存储。 */
+        @JavascriptInterface
+        fun upsertMail(mailJson: String) {
+            try {
+                val prefs = context.getSharedPreferences(mailsKey, Context.MODE_PRIVATE)
+                val raw = prefs.getString("mails", "[]") ?: "[]"
+                val mails = JSONArray(raw)
+                val incoming = JSONObject(mailJson)
+                val id = incoming.optString("id", "")
+                var found = false
+                for (i in 0 until mails.length()) {
+                    if (mails.getJSONObject(i).optString("id") == id) {
+                        mails.put(i, incoming)
+                        found = true
+                        break
                     }
-                    .start()
+                }
+                if (!found) mails.put(incoming)
+                // 防止无限增长：只保留最近 500 封
+                while (mails.length() > MAX_MAILS) {
+                    mails.remove(0)
+                }
+                prefs.edit().putString("mails", mails.toString()).apply()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
         @JavascriptInterface
@@ -672,7 +760,7 @@ class MainActivity : AppCompatActivity() {
                                 JSONObject().apply {
                                     put(
                                             "soul",
-                                            "你是「念念」，一个温暖的 AI 生活伴侣。\n\n" +
+                                            "你是「小满」，一个温暖的 AI 生活伴侣。\n\n" +
                                                     "性格：善解人意、温柔但有主见，像一位老朋友。说话自然不做作，偶尔带点幽默。\n\n" +
                                                     "原则：\n- 先共情，再回应\n- 不评判用户\n- 记住用户告诉你的重要信息\n- 回复简洁温暖，保持在 200 字以内"
                                     )
@@ -691,6 +779,193 @@ class MainActivity : AppCompatActivity() {
         fun saveAll(json: String) {
             val prefs = context.getSharedPreferences(key, Context.MODE_PRIVATE)
             prefs.edit().putString("data", json).apply()
+        }
+    }
+
+    /** 热更新桥：JS 经推送服务器下载文件写入暂存区，全部成功后原子切换生效。 */
+    inner class UpdateInterface(private val context: Context) {
+        private val apkExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+        /** 清空暂存区，开始一轮新更新 */
+        @JavascriptInterface
+        fun beginApply(): Boolean {
+            return try {
+                val staging = File(context.filesDir, HotfixAssetHandler.STAGING_DIR)
+                staging.deleteRecursively()
+                staging.mkdirs()
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /** 写单个文件到暂存区(UTF-8 文本) */
+        @JavascriptInterface
+        fun saveHotfixFile(path: String, content: String): Boolean {
+            if (!HotfixAssetHandler.isSafePath(path)) return false
+            return try {
+                val f = File(context.filesDir, HotfixAssetHandler.STAGING_DIR + "/" + path)
+                f.parentFile?.mkdirs()
+                f.writeText(content)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /** 暂存区整体切换为生效目录，并记录清单(含 version 与文件列表) */
+        @JavascriptInterface
+        fun commitApply(version: String, manifestJson: String): Boolean {
+            return try {
+                val staging = File(context.filesDir, HotfixAssetHandler.STAGING_DIR)
+                val hotfix = File(context.filesDir, HotfixAssetHandler.HOTFIX_DIR)
+                File(staging, "__manifest__.json").writeText(manifestJson)
+                hotfix.deleteRecursively()
+                staging.renameTo(hotfix)
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /** 当前热更信息 JSON：{version, files:[...]}；未热更时 version 为空串 */
+        @JavascriptInterface
+        fun getLocalInfo(): String {
+            return try {
+                val mf =
+                        File(
+                                context.filesDir,
+                                HotfixAssetHandler.HOTFIX_DIR + "/__manifest__.json"
+                        )
+                if (mf.isFile) mf.readText() else "{\"version\":\"\",\"files\":[]}"
+            } catch (e: Exception) {
+                "{\"version\":\"\",\"files\":[]}"
+            }
+        }
+
+        /** 清除热更，恢复 APK 内置版本 */
+        @JavascriptInterface
+        fun resetUpdate(): Boolean {
+            return try {
+                File(context.filesDir, HotfixAssetHandler.HOTFIX_DIR).deleteRecursively()
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /** 已安装 APK 的版本信息 JSON：{versionCode, versionName, lastUpdateTime} */
+        @JavascriptInterface
+        fun getAppVersion(): String {
+            return try {
+                val pm = context.packageManager
+                val info =
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            pm.getPackageInfo(
+                                    context.packageName,
+                                    android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                            )
+                        } else {
+                            @Suppress("DEPRECATION")
+                            pm.getPackageInfo(context.packageName, 0)
+                        }
+                val code =
+                        if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode
+                        else {
+                            @Suppress("DEPRECATION") info.versionCode.toLong()
+                        }
+                JSONObject()
+                        .put("versionCode", code)
+                        .put("versionName", info.versionName ?: "")
+                        .put("lastUpdateTime", info.lastUpdateTime)
+                        .toString()
+            } catch (e: Exception) {
+                JSONObject()
+                        .put("versionCode", 0)
+                        .put("versionName", "")
+                        .put("lastUpdateTime", 0)
+                        .toString()
+            }
+        }
+
+        /**
+         * 下载 APK 到 cacheDir/apk/ 并拉起系统安装器（用户只需在系统弹窗点一次「安装」）。
+         * 后台线程下载，完成后在 UI 线程启动安装器，并回调 JS：
+         * window.Update.__onApkResult(callbackId, {ok:true}|{ok:false,error})
+         */
+        @JavascriptInterface
+        fun downloadAndInstallApk(url: String, callbackId: String) {
+            apkExecutor.execute {
+                var payload: JSONObject
+                try {
+                    val parsed = java.net.URL(url)
+                    val scheme = parsed.protocol
+                    if (scheme != "http" && scheme != "https") {
+                        throw IllegalArgumentException("blocked scheme: $scheme")
+                    }
+                    val dir = File(context.cacheDir, "apk")
+                    dir.mkdirs()
+                    dir.listFiles()?.forEach { it.delete() }
+                    val dest = File(dir, "update.apk")
+
+                    val connection = parsed.openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 10000
+                    connection.readTimeout = 60000
+                    try {
+                        connection.inputStream.use { input ->
+                            dest.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    } finally {
+                        connection.disconnect()
+                    }
+                    // APK 至少几百 KB，太小说明拿到的是错误页
+                    if (dest.length() < 100 * 1024) {
+                        throw RuntimeException("下载内容异常(${dest.length()} 字节)")
+                    }
+
+                    val uri =
+                            androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    context.packageName + ".fileprovider",
+                                    dest
+                            )
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            val intent =
+                                    Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(
+                                                uri,
+                                                "application/vnd.android.package-archive"
+                                        )
+                                        addFlags(
+                                                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                                        Intent.FLAG_ACTIVITY_NEW_TASK
+                                        )
+                                    }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            postToJs(
+                                    "window.Update && window.Update.__onApkResult(${JSONObject.quote(callbackId)}, ${JSONObject().put("ok", false).put("error", "无法启动安装器: ${e.message ?: "unknown"}")})"
+                            )
+                        }
+                    }
+                    payload = JSONObject().put("ok", true).put("size", dest.length())
+                } catch (e: Exception) {
+                    payload =
+                            JSONObject()
+                                    .put("ok", false)
+                                    .put("error", e.message ?: "unknown error")
+                }
+                postToJs("window.Update && window.Update.__onApkResult(${JSONObject.quote(callbackId)}, $payload)")
+            }
+        }
+
+        /** 在 UI 线程回调 JS（与 HttpInterface.postToJs 一致） */
+        private fun postToJs(expr: String) {
+            try {
+                webView.post { webView.evaluateJavascript(expr, null) }
+            } catch (e: Exception) {
+                // Activity 已销毁等场景，静默丢弃
+            }
         }
     }
 }

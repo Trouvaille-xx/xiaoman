@@ -1,0 +1,257 @@
+{
+  "version": "20261028-005116-633f8a",
+  "updatedAt": "2026-10-27T16:51:16.407Z",
+  "count": 50,
+  "files": [
+    {
+      "path": "agent.js",
+      "hash": "7d328d23f9c7a8ffb22b16a62908662ad26153af",
+      "size": 15551
+    },
+    {
+      "path": "app-config.js",
+      "hash": "f20fe5b37045f5dcc888ec7c205881fabe807af8",
+      "size": 312
+    },
+    {
+      "path": "app.html",
+      "hash": "1c4d573198c753181f1a0af67e959330aae40d81",
+      "size": 167499
+    },
+    {
+      "path": "app.js",
+      "hash": "b495d51738afc40769fe0b6a1f3cf59a40b42ec6",
+      "size": 204017
+    },
+    {
+      "path": "conversation-memory.js",
+      "hash": "ac1ba021fa67d947c99fa580d7f26325aef9dc9b",
+      "size": 2696
+    },
+    {
+      "path": "hotupdate.js",
+      "hash": "3edbd883ec1dd4d071899c7c99828833fca42bc9",
+      "size": 7029
+    },
+    {
+      "path": "insight/insight.css",
+      "hash": "0acee57990d1298904656edcb959a3df36dcce86",
+      "size": 9977
+    },
+    {
+      "path": "insight/insight.html",
+      "hash": "ccc84e9cc6d7c28ee3d874d28ad04ec69cf2b361",
+      "size": 3281
+    },
+    {
+      "path": "insight/insight.js",
+      "hash": "79a8bf97aeac8e3b7402d2b7a9b95114b372f35d",
+      "size": 16023
+    },
+    {
+      "path": "insight/insight_prompts.js",
+      "hash": "7a18daf87d9973f58598d6452235036efb6c506a",
+      "size": 9919
+    },
+    {
+      "path": "insight/insight_prompts.json",
+      "hash": "88872d9c571eaae26c38a044fca48da477b267b9",
+      "size": 9767
+    },
+    {
+      "path": "mail/mail.css",
+      "hash": "ec1b3b8c0b34ed0d995edf10124a2e20ab77beef",
+      "size": 16611
+    },
+    {
+      "path": "mail/mail.html",
+      "hash": "40902eb1c10996d579938c39c24730755e30b631",
+      "size": 3717
+    },
+    {
+      "path": "mail/mail.js",
+      "hash": "1f39a1e92111f3ef783fa1dc056c0c89933151d8",
+      "size": 31155
+    },
+    {
+      "path": "mascot/xiaoman-avatar.png",
+      "hash": "a481997a62edc8395d8f512321286d708bc8e0c1",
+      "size": 24517
+    },
+    {
+      "path": "mascot/xiaoman-confused.png",
+      "hash": "22cb3d6958095d46d7ace2b8ed123a49a7005f9d",
+      "size": 111209
+    },
+    {
+      "path": "mascot/xiaoman-cry.png",
+      "hash": "662603667add5c14d5d36a410a10ed666ef9341a",
+      "size": 105523
+    },
+    {
+      "path": "mascot/xiaoman-hero.png",
+      "hash": "50637c300bb3008d142acdf8dbcc2bc337f6634e",
+      "size": 152897
+    },
+    {
+      "path": "mascot/xiaoman-logo.png",
+      "hash": "4b73295c46e688344083c995bf52790df0d5d894",
+      "size": 12697
+    },
+    {
+      "path": "mascot/xiaoman-sleepy.png",
+      "hash": "3296046ba1e01ffccb62b2aaac32a87953561167",
+      "size": 113763
+    },
+    {
+      "path": "memory/memory.css",
+      "hash": "a773d31321ea366ebbac249465057a04d9969ed1",
+      "size": 19760
+    },
+    {
+      "path": "memory/memory.html",
+      "hash": "06e1ac2b10a299fcce6f7473e904d0464969bc4f",
+      "size": 6210
+    },
+    {
+      "path": "memory/memory.js",
+      "hash": "093aafbdf0e25abad352b94b503851e5a9a4570a",
+      "size": 32926
+    },
+    {
+      "path": "memory-engine.js",
+      "hash": "b1172b4079c12fd0fdf154a9708bf7bb93f065bc",
+      "size": 15218
+    },
+    {
+      "path": "memory-service.js",
+      "hash": "bdd2fed6211e319d8e670ab667225eecd3d46653",
+      "size": 88501
+    },
+    {
+      "path": "native-http.js",
+      "hash": "ce504764ded02af6e8613835f54844dac1486ba3",
+      "size": 8542
+    },
+    {
+      "path": "penpals_data.json",
+      "hash": "80bc5f76fd99d61a17444ff5244c071c64ea16f5",
+      "size": 4069
+    },
+    {
+      "path": "skills/create_note.js",
+      "hash": "5bd0790eddcfeaf0ac71a410929623e2f58b7265",
+      "size": 1681
+    },
+    {
+      "path": "skills/daily_review.js",
+      "hash": "66a22b6ee4c0703d9a47766d090aa22c0d520b3b",
+      "size": 2273
+    },
+    {
+      "path": "skills/generate_note_image.js",
+      "hash": "5163147eb8aee8d1b10679aa909e4a3823b8d282",
+      "size": 10034
+    },
+    {
+      "path": "skills/get_note.js",
+      "hash": "d44781647f01caa9b1056d36b73c2a6388e12fcc",
+      "size": 1885
+    },
+    {
+      "path": "skills/get_special_day.js",
+      "hash": "64779a20537af01f77cc272d76f17a44b5c9035e",
+      "size": 2982
+    },
+    {
+      "path": "skills/get_weather.js",
+      "hash": "f3efb3435e560fca37632bb5ffff277dbc680089",
+      "size": 1705
+    },
+    {
+      "path": "skills/list_insight_modes.js",
+      "hash": "77ae2618e25d366ba4da696fbfcb615741842f70",
+      "size": 770
+    },
+    {
+      "path": "skills/note_stats.js",
+      "hash": "40250997cb06ac5873bce9e6276c08ae3b310d58",
+      "size": 3124
+    },
+    {
+      "path": "skills/penpal_weekly_letter.js",
+      "hash": "316d740a0beedaabad1826fb932c15e73a61060c",
+      "size": 10771
+    },
+    {
+      "path": "skills/remember_to.js",
+      "hash": "c9d9f690b0b7d7b2b54b95faa74d43b403d36f3a",
+      "size": 1874
+    },
+    {
+      "path": "skills/run_insight.js",
+      "hash": "29f28a1000ef3e57fb052934a5eb582115e2fb7f",
+      "size": 7234
+    },
+    {
+      "path": "skills/search_notes.js",
+      "hash": "62246190286ecb54acad5ea6d1de59315d3e6752",
+      "size": 2886
+    },
+    {
+      "path": "skills/send_proactive_mail.js",
+      "hash": "6ea9c4449f4c6c839897214c691496de98a13c74",
+      "size": 2808
+    },
+    {
+      "path": "skills/update_archive.js",
+      "hash": "8f535b9256b6622c156f36886437b196f85db97e",
+      "size": 3353
+    },
+    {
+      "path": "skills/web_search.js",
+      "hash": "e69bf8f4adddc426ec87f263ee6b084aa9bae9f7",
+      "size": 1928
+    },
+    {
+      "path": "stats.html",
+      "hash": "77672a0bf93d8f81d30a3a267aad050e8204586b",
+      "size": 17832
+    },
+    {
+      "path": "style.css",
+      "hash": "13fba0b74a3b63e89c21cb25c76ad29f6b7e18ed",
+      "size": 45714
+    },
+    {
+      "path": "styles/healing_thumb.jpg",
+      "hash": "4afcdaf95c6ecd1614569d1536062769cd04a272",
+      "size": 9712
+    },
+    {
+      "path": "styles/illustration_thumb.jpg",
+      "hash": "18f908923f4594c0fa0d97b796ce1b6f0a2b162f",
+      "size": 7153
+    },
+    {
+      "path": "styles/minimal_thumb.jpg",
+      "hash": "98758e38bc36ed1a1f8492912af8c9722414d956",
+      "size": 5690
+    },
+    {
+      "path": "styles/realistic_thumb.jpg",
+      "hash": "676de7832de748beb02ac4c9469e529e39af9aa9",
+      "size": 7615
+    },
+    {
+      "path": "styles/watercolor_thumb.jpg",
+      "hash": "706c66e0cae4f55e4c65f262469321246e9ef91f",
+      "size": 9463
+    },
+    {
+      "path": "v6-integration.js",
+      "hash": "3fd156c4b06efaaafb00b6adba356a57c1ee0662",
+      "size": 67647
+    }
+  ]
+}

@@ -97,8 +97,13 @@ function loadPrompts() {
             }
         }
     } catch(e) {}
+    // 优先级：用户自定义(settings) > 后台配置(NIAN_CONFIG) > 内置 INSIGHT_PROMPTS
     if (stored && Array.isArray(stored) && stored.length > 0) {
         prompts = stored.map(function(p) {
+            return { id: p.id, name: p.name, systemPrompt: p.systemPrompt, desc: p.desc || '' };
+        });
+    } else if (typeof NIAN_CONFIG !== 'undefined' && NIAN_CONFIG.prompts && Array.isArray(NIAN_CONFIG.prompts.insight) && NIAN_CONFIG.prompts.insight.length > 0) {
+        prompts = NIAN_CONFIG.prompts.insight.map(function(p) {
             return { id: p.id, name: p.name, systemPrompt: p.systemPrompt, desc: p.desc || '' };
         });
     } else {
@@ -194,34 +199,9 @@ function selectNote(noteId) {
 }
 
 function generateInsight() {
-    // 注入云端 API 配置
-    var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
-    var token = '';
-    var debugInfo = '';
-    try {
-        var authRaw = typeof AndroidSettings !== 'undefined' ? AndroidSettings.loadSettings() : null;
-        debugInfo += 'settings:' + (authRaw ? 'OK' : 'NULL') + ' ';
-        if (authRaw) {
-            var a = JSON.parse(authRaw);
-            token = a.nian_auth_token || '';
-            debugInfo += 'token:' + (token ? token.substring(0, 10) + '...' : 'EMPTY') + ' ';
-        }
-    } catch(e) { debugInfo += 'err:' + e.message; }
-    if (token && typeof AndroidSettings !== 'undefined') {
-        var raw = AndroidSettings.loadSettings();
-        var s = raw ? JSON.parse(raw) : {};
-        s.apiUrl = backendUrl;
-        s.apiKey = token;
-        s.model = 'deepseek-v4-flash';
-        AndroidSettings.saveSettings(JSON.stringify(s));
-        debugInfo += 'injected';
-    } else {
-        debugInfo += 'SKIP(token empty or no bridge)';
-    }
-
     var settings = DataService.settings.load();
     if (!settings || !settings.apiUrl || !settings.apiKey) {
-        showError('请先在设置中配置 AI 参数（API 地址、密钥、模型） [' + debugInfo + ']');
+        showError('请先在设置中配置 AI 参数（API 地址、密钥、模型）');
         return;
     }
 
@@ -234,44 +214,50 @@ function generateInsight() {
     var noteContent = plainText;
     var systemPrompt = selectedMethod.systemPrompt;
 
-    var url = settings.apiUrl.replace(/\/+$/, '');
-    if (!url.endsWith('/chat/completions')) {
-        if (url.endsWith('/v1')) url += '/chat/completions';
-        else if (!url.includes('/chat/completions')) url += '/chat/completions';
-    }
+    var url = (typeof NativeHttp !== 'undefined' && NativeHttp.chatEndpoint)
+        ? NativeHttp.chatEndpoint(settings.apiUrl)
+        : settings.apiUrl.replace(/\/+$/, '') + '/chat/completions';
 
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + settings.apiKey
-        },
-        body: JSON.stringify({
+    // Android 端走原生桥（无 CORS、不阻塞 UI），浏览器端走 XHR
+    var request = (typeof NativeHttp !== 'undefined')
+        ? NativeHttp.postJson(url, { Authorization: 'Bearer ' + settings.apiKey }, {
             model: settings.model || 'gpt-4o',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: noteContent }
             ],
-            temperature: 0.7,
-            thinking: { type: "disabled" }
+            temperature: 0.7
         })
-    })
-    .then(function(res) {
-        if (!res.ok) {
-            if (res.status === 401) throw new Error('API 密钥无效');
-            if (res.status === 404) throw new Error('API 地址不正确');
-            throw new Error('请求失败 (' + res.status + ')');
-        }
-        return res.json();
-    })
-    .then(function(data) {
+        : fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + settings.apiKey
+            },
+            body: JSON.stringify({
+                model: settings.model || 'gpt-4o',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: noteContent }
+                ],
+                temperature: 0.7
+            })
+        }).then(function(res) {
+            if (!res.ok) {
+                if (res.status === 401) throw new Error('API 密钥无效');
+                if (res.status === 404) throw new Error('API 地址不正确');
+                throw new Error('请求失败 (' + res.status + ')');
+            }
+            return res.json();
+        });
+
+    request.then(function(data) {
         var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!text) throw new Error('AI 返回内容为空');
         text = cleanOutput(text);
         document.getElementById('resultContent').innerHTML = renderMarkdown(text);
         saveHistory(text);
-    })
-    .catch(function(err) {
+    }).catch(function(err) {
         showError(err.message || '生成洞察失败，请重试');
     });
 }

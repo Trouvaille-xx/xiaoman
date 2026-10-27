@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>小满 · 统计</title>
+<style>
+  :root {
+    --bg: #f5f0e6;
+    --card: #fdfaf3;
+    --text: #2a2418;
+    --text-secondary: #5e574b;
+    --text-muted: #968d7e;
+    --accent: #a85a2a;
+    --accent-light: rgba(168, 90, 42, 0.08);
+    --border: rgba(60, 40, 20, 0.1);
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Noto Serif SC', 'Songti SC', 'PingFang SC', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── header ── */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(245, 240, 230, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-back {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; cursor: pointer;
+    font-size: 20px; color: var(--text);
+    transition: background 0.2s;
+  }
+  .header-back:active { background: var(--border); }
+  .header-title { font-size: 17px; font-weight: 600; letter-spacing: 1px; }
+  .header-sub { font-size: 12px; color: var(--text-muted); }
+  .header-spacer { width: 36px; }
+
+  /* ── 杂志网格 ── */
+  .magazine {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+    max-width: 520px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+  }
+
+  /* ── 卡片公共 ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card-pad { padding: 16px; }
+  .card-pad-sm { padding: 14px; }
+
+  /* ── 跨栏卡片 ── */
+  .span-2 { grid-column: 1 / -1; }
+
+  /* ── 导语卡片 ── */
+  .intro-card {
+    grid-column: 1 / -1;
+    background: transparent;
+    border: none;
+    padding: 8px 4px 4px;
+  }
+  .intro-overline {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .intro-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 2px;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+  .intro-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .intro-sub b { color: var(--accent); font-weight: 600; }
+
+  /* ── 数字卡片 ── */
+  .num-card { text-align: center; }
+  .num-card .num {
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.05;
+    letter-spacing: -1px;
+  }
+  .num-card .num.sm { font-size: 34px; }
+  .num-card .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── 趋势卡片 ── */
+  .trend-card { grid-column: 1 / -1; }
+  .trend-head {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .trend-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 80px;
+  }
+  .trend-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+  }
+  .trend-bar-count {
+    width: 100%;
+    max-width: 20px;
+    background: var(--accent);
+    opacity: 0.55;
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+  }
+  .trend-col-marker {
+    font-size: 8px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    text-align: center;
+  }
+
+  /* ── 标签卡片 ── */
+  .tags-card { grid-column: 1 / -1; }
+  .tags-head {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .tags-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .tag-pill {
+    padding: 5px 12px;
+    border-radius: 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+
+  /* ── 词云卡片 ── */
+  .cloud-card { grid-column: 1 / -1; }
+  .cloud-head {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .cloud-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+    line-height: 1.5;
+  }
+  .cloud-wrap .cw {
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  /* ── 时钟卡片 ── */
+  .clock-card { grid-column: 1 / -1; }
+  .clock-head {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .clock-row {
+    display: flex;
+    gap: 4px;
+  }
+  .clock-seg {
+    flex: 1;
+    text-align: center;
+  }
+  .clock-seg-icon { font-size: 18px; }
+  .clock-seg-num { font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0; }
+  .clock-seg-bar {
+    height: 4px;
+    border-radius: 2px;
+    margin: 0 4px 4px;
+  }
+  .clock-seg-label { font-size: 10px; color: var(--text-muted); }
+
+  /* ── 脚注卡片 ── */
+  .foot-card {
+    grid-column: 1 / -1;
+    background: transparent;
+    border: none;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 2;
+  }
+
+  /* ── 空态 ── */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* ── 暖色标签色板 ── */
+  .pill-0 { background: #f5e1cc; } .pill-1 { background: #f0dcc3; }
+  .pill-2 { background: #f5e6d3; } .pill-3 { background: #eed9c0; }
+  .pill-4 { background: #f3e0ca; } .pill-5 { background: #f1ddc5; }
+  .pill-6 { background: #f4e3cf; } .pill-7 { background: #efdbc4; }
+  .pill-8 { background: #f2dfc8; } .pill-9 { background: #f6e7d5; }
+  .pill-10{ background: #f0dac2; } .pill-11{ background: #f3e1cd; }
+
+  .bar-0 { background: #d4a87c; } .bar-1 { background: #e0c4a0; }
+  .bar-2 { background: #ccb890; } .bar-3 { background: #c8b088; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-back" onclick="history.back()">←</div>
+  <div>
+    <div class="header-title">统计</div>
+    <div class="header-sub" id="headerRange"></div>
+  </div>
+  <div class="header-spacer"></div>
+</div>
+
+<div class="magazine" id="magazine">
+  <div class="empty-state" id="emptyState">📜<br><br>暂无笔记</div>
+</div>
+
+<script>
+(function() {
+  // ── 数据加载 ──
+  var hasBridge = (typeof AndroidStorage !== 'undefined' && AndroidStorage !== null);
+  function loadNotes() {
+    try {
+      var raw = hasBridge ? AndroidStorage.loadNotes() : (localStorage.getItem('nian_notes') || '[]');
+      var data = JSON.parse(raw);
+      return Array.isArray(data) ? data : [];
+    } catch(e) { return []; }
+  }
+  var notes = loadNotes();
+  if (notes.length === 0) return;
+
+  document.getElementById('emptyState').style.display = 'none';
+
+  // ── 计算 ──
+  function totalWords() {
+    return notes.reduce(function(s, n) {
+      return s + (n.content.match(/[一-龥]/g) || []).length + (n.content.match(/[a-zA-Z0-9]+/g) || []).length;
+    }, 0);
+  }
+  function uniqueDays() {
+    var s = new Set();
+    notes.forEach(function(n) { if (n.createdAt) s.add(n.createdAt.substring(0,10)); });
+    return s.size;
+  }
+  function currentStreak() {
+    var days = Array.from(new Set(notes.map(function(n) {
+      return n.createdAt ? n.createdAt.substring(0,10) : '';
+    }).filter(Boolean))).sort();
+    if (!days.length) return 0;
+    var today = new Date().toISOString().substring(0,10);
+    var yest = new Date(Date.now()-86400000).toISOString().substring(0,10);
+    var last = days[days.length-1];
+    if (last !== today && last !== yest) return 0;
+    var c = 1;
+    for (var i = days.length-2; i >= 0; i--) {
+      if (Math.round((new Date(days[i+1]) - new Date(days[i])) / 86400000) === 1) c++;
+      else break;
+    }
+    return c;
+  }
+  function monthlyTrend() {
+    var months = [];
+    var now = new Date();
+    for (var m = 11; m >= 0; m--) {
+      var d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      months.push({ key: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'), label: (d.getMonth()+1)+'月', count: 0, words: 0 });
+    }
+    notes.forEach(function(n) {
+      if (!n.createdAt) return;
+      var key = n.createdAt.substring(0,7);
+      var mo = months.find(function(x) { return x.key === key; });
+      if (mo) {
+        mo.count++;
+        mo.words += (n.content.match(/[一-龥]/g) || []).length + (n.content.match(/[a-zA-Z0-9]+/g) || []).length;
+      }
+    });
+    return months;
+  }
+  function tagStats() {
+    var f = {};
+    notes.forEach(function(n) {
+      (n.content.match(/#([^\s]+)/g) || []).forEach(function(t) {
+        var tag = t.substring(1);
+        if (tag && tag !== '#') f[tag] = (f[tag]||0)+1;
+      });
+    });
+    return Object.entries(f).sort(function(a,b) { return b[1]-a[1]; });
+  }
+  function timeDistribution() {
+    var segs = [
+      { key:'morning', label:'晨', range:[6,12], count:0, icon:'☀️', barClass:'bar-0' },
+      { key:'afternoon', label:'午', range:[12,18], count:0, icon:'🌤', barClass:'bar-1' },
+      { key:'evening', label:'暮', range:[18,24], count:0, icon:'🌅', barClass:'bar-2' },
+      { key:'night', label:'夜', range:[0,6], count:0, icon:'🌙', barClass:'bar-3' }
+    ];
+    notes.forEach(function(n) {
+      if (!n.createdAt) return;
+      var h = new Date(n.createdAt).getHours();
+      var s = segs.find(function(x) { return h >= x.range[0] && h < x.range[1]; });
+      if (s) s.count++;
+    });
+    return segs;
+  }
+  function firstDate() {
+    var dates = notes.map(function(n) { return n.createdAt; }).filter(Boolean).sort();
+    if (!dates.length) return '';
+    var d = new Date(dates[0]);
+    return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';
+  }
+
+  // ── 中文分词关键词 ──
+  function extractKeywords(limit) {
+    limit = limit || 40;
+    var stopWords = new Set([
+      '的','了','在','是','我','有','和','就','不','人','都','一','一个','上','也','很','到',
+      '说','要','去','你','会','着','没有','看','好','自己','这','他','它','她','们','那',
+      '这个','那个','什么','怎么','如果','因为','所以','但是','可以','已经','还是','只是',
+      '就是','不是','可能','而且','不过','虽然','然后','之后','觉得','知道','应该','需要',
+      '问题','东西','时间','事情','起来','出来','回来','过去','过来','下去','这样','那样',
+      '如何','哪里','还有','没有','不会','不能','不要','一些','真的','为了','但是','的话',
+      '等等','一般','一个','一种','比较','相对','所有','这个','那个','我们','他们','你们',
+      '这是','那是','就是','不是'
+    ]);
+
+    // 合并所有笔记文本（去标签）
+    var fullText = notes.map(function(n) {
+      return n.content.replace(/#[^\s]+/g, '').replace(/https?:\/\/\S+/g, '').replace(/[a-zA-Z0-9]+/g, ' ');
+    }).join(' ');
+
+    var freq = {};
+    try {
+      // Intl.Segmenter 原生中文分词（Chrome 87+ / WebView 支持）
+      var segmenter = new Intl.Segmenter('zh-CN', { granularity: 'word' });
+      var segments = segmenter.segment(fullText);
+      var iter = segments[Symbol.iterator]();
+      var result;
+      while (!(result = iter.next()).done) {
+        var word = result.value.segment;
+        // 只取 2-4 字中文词，滤停用词和单字
+        if (word.length >= 2 && word.length <= 4 && /^[一-龥]+$/.test(word) && !stopWords.has(word)) {
+          freq[word] = (freq[word] || 0) + 1;
+        }
+      }
+    } catch(e) {
+      // fallback: 简单 2-gram
+      var text = fullText.replace(/[^一-龥]/g, '');
+      for (var i = 0; i < text.length - 1; i++) {
+        var w = text.substring(i, i+2);
+        if (!stopWords.has(w)) freq[w] = (freq[w]||0)+1;
+      }
+    }
+
+    return Object.entries(freq).sort(function(a,b) { return b[1]-a[1]; }).slice(0, limit);
+  }
+
+  function longestNote() {
+    var max = { words: 0, content: '' };
+    notes.forEach(function(n) {
+      var w = (n.content.match(/[一-龥]/g) || []).length + (n.content.match(/[a-zA-Z0-9]+/g) || []).length;
+      if (w > max.words) { max.words = w; max.content = n.content; }
+    });
+    return max;
+  }
+  function shortestNote() {
+    var min = { words: Infinity, content: '' };
+    notes.forEach(function(n) {
+      var w = (n.content.match(/[一-龥]/g) || []).length + (n.content.match(/[a-zA-Z0-9]+/g) || []).length;
+      if (w > 0 && w < min.words) { min.words = w; min.content = n.content; }
+    });
+    return min.words === Infinity ? { words: 0, content: '' } : min;
+  }
+
+  // ── 渲染 ──
+  document.getElementById('headerRange').textContent = '自 ' + firstDate() + ' 至今';
+
+  var totalW = totalWords();
+  var wordsStr = totalW >= 10000 ? (totalW/10000).toFixed(1)+'万' : totalW.toString();
+  var tags = tagStats();
+  var topTag = tags.length > 0 ? tags[0][0] : '';
+  var topTag2 = tags.length > 1 ? tags[1][0] : '';
+  var trends = monthlyTrend();
+  var maxTrendCount = Math.max.apply(null, trends.map(function(t){return t.count;})) || 1;
+  var maxTrendWords = Math.max.apply(null, trends.map(function(t){return t.words;})) || 1;
+  var keywords = extractKeywords(50);
+  var segs = timeDistribution();
+  var totalSeg = segs.reduce(function(s,x){return s+x.count;},0) || 1;
+  var longest = longestNote();
+  var shortest = shortestNote();
+
+  var html = '';
+
+  // ── 导语 ──
+  html += '<div class="intro-card card-pad-sm">' +
+    '<div class="intro-overline">Nian · Journal</div>' +
+    '<div class="intro-title">写作卷</div>' +
+    '<div class="intro-sub">' +
+    notes.length + ' 篇笔记，<b>' + wordsStr + '</b> 字，横跨 ' + uniqueDays() + ' 个日夜。' +
+    (topTag ? ' 最爱 <b>#' + topTag + '</b>。' : '') +
+    '</div></div>';
+
+  // ── 四个数字卡片（2x2 杂志网格）──
+  html += '<div class="card num-card"><div class="card-pad"><div class="num">' + notes.length + '</div><div class="label">墨迹 · 笔记总数</div></div></div>';
+  html += '<div class="card num-card"><div class="card-pad"><div class="num">' + wordsStr + '</div><div class="label">落笔 · 总字数</div></div></div>';
+  html += '<div class="card num-card"><div class="card-pad"><div class="num sm">' + uniqueDays() + '</div><div class="label">研墨日 · 活跃天数</div></div></div>';
+  html += '<div class="card num-card"><div class="card-pad"><div class="num sm">' + currentStreak() + '</div><div class="label">不休卷 · 连续天数</div></div></div>';
+
+  // ── 趋势图（跨栏）──
+  html += '<div class="card trend-card"><div class="card-pad-sm">' +
+    '<div class="trend-head">· 笔墨涨落</div>' +
+    '<div class="trend-bars">';
+  html += trends.map(function(t) {
+    var h = Math.max(3, (t.count / maxTrendCount) * 72);
+    return '<div class="trend-col"><div class="trend-bar-count" style="height:' + h + 'px;"></div><div class="trend-col-marker">' + t.label.replace('月','') + '</div></div>';
+  }).join('');
+  html += '</div></div></div>';
+
+  // ── 标签排行（跨栏）──
+  html += '<div class="card tags-card"><div class="card-pad-sm">' +
+    '<div class="tags-head">· 拾珠</div>' +
+    '<div class="tags-flow">';
+  var maxTagF = tags.length > 0 ? tags[0][1] : 1;
+  html += tags.map(function(t, i) {
+    var ratio = t[1] / maxTagF;
+    var size = 13 + ratio * 6;
+    var w = ratio > 0.6 ? 600 : 400;
+    return '<span class="tag-pill pill-' + (i % 12) + '" style="font-size:' + size.toFixed(0) + 'px;font-weight:' + w + ';">#' + t[0] + ' <span style="font-size:10px;opacity:0.5;">' + t[1] + '</span></span>';
+  }).join('');
+  html += '</div></div></div>';
+
+  // ── 关键词云（跨栏）──
+  html += '<div class="card cloud-card"><div class="card-pad-sm">' +
+    '<div class="cloud-head">· 词海</div>';
+  if (keywords.length > 0) {
+    var maxKw = keywords[0][1];
+    var minKw = keywords[keywords.length-1][1];
+    var kwRange = maxKw - minKw || 1;
+    html += '<div class="cloud-wrap">' + keywords.map(function(k) {
+      var ratio = (k[1] - minKw) / kwRange;
+      var size = 13 + ratio * 18;
+      var opacity = 0.35 + ratio * 0.6;
+      var weight = ratio > 0.5 ? 600 : 400;
+      return '<span class="cw" style="font-size:' + size.toFixed(0) + 'px;opacity:' + opacity.toFixed(2) + ';font-weight:' + weight + ';">' + k[0] + '</span>';
+    }).join('') + '</div>';
+  } else {
+    html += '<div class="cloud-wrap"><span style="color:var(--text-muted);font-size:13px;">多写几篇，词海自现</span></div>';
+  }
+  html += '</div></div>';
+
+  // ── 墨时（跨栏）──
+  html += '<div class="card clock-card"><div class="card-pad-sm">' +
+    '<div class="clock-head">· 墨时</div>' +
+    '<div class="clock-row">';
+  html += segs.map(function(s) {
+    var pct = Math.max(6, (s.count / totalSeg) * 100);
+    return '<div class="clock-seg">' +
+      '<div class="clock-seg-icon">' + s.icon + '</div>' +
+      '<div class="clock-seg-num">' + s.count + '</div>' +
+      '<div class="clock-seg-bar ' + s.barClass + '" style="width:' + pct + '%;margin:0 auto;"></div>' +
+      '<div class="clock-seg-label">' + s.label + '</div>' +
+      '</div>';
+  }).join('');
+  html += '</div></div></div>';
+
+  // ── 脚注 ──
+  html += '<div class="foot-card">' +
+    '最长 · <b>' + longest.words + '</b> 字 &nbsp; 最短 · <b>' + shortest.words + '</b> 字' +
+    '</div>';
+
+  document.getElementById('magazine').innerHTML = html;
+
+})();
+</script>
+
+</body>
+</html>

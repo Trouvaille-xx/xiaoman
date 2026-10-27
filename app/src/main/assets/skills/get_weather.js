@@ -20,24 +20,15 @@
       if (!args || !args.city) return { error: "请指定城市" };
       var city = encodeURIComponent(args.city.trim());
 
-      if (typeof AndroidHttp !== "undefined") {
-        var raw = AndroidHttp.get("https://wttr.in/" + city + "?format=j1");
-        try {
-          var data = JSON.parse(raw);
-          var cc = data.current_condition && data.current_condition[0];
-          if (cc) {
-            return {
-              city: args.city.trim(),
-              weather: cc.temp_C + "°C," + cc.weatherDesc[0].value + "," + cc.humidity + "%湿度,风" + cc.windspeedKmph + "km/h"
-            };
-          }
-        } catch(e) {}
-        return { city: args.city.trim(), weather: raw.substring(0, 200) };
-      }
+      // Android 端：走原生异步 GET（后台线程，不阻塞 JS）；浏览器端：fetch
+      var request = (typeof NativeHttp !== 'undefined' && typeof AndroidHttp !== 'undefined')
+        ? NativeHttp.getAsync("https://wttr.in/" + city + "?format=j1").then(function(resp) {
+            if (!resp.ok) throw new Error(resp.error || "request failed");
+            return JSON.parse(resp.data);
+          })
+        : fetch("https://wttr.in/" + city + "?format=j1").then(function(r) { return r.json(); });
 
-      return fetch("https://wttr.in/" + city + "?format=j1")
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
+      return request.then(function(data) {
           var cc = data.current_condition && data.current_condition[0];
           if (cc) {
             return {

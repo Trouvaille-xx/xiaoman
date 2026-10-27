@@ -29,16 +29,16 @@ class MailWorker {
             val model = settings.optString("model", "gpt-4o")
 
             if (apiUrl.isEmpty() || apiKey.isEmpty()) {
-                saveReply(context, mailId, "念念还没配置 AI 呢~ 请先在设置中配置 API 地址和密钥。")
+                saveReply(context, mailId, "小满还没配置 AI 呢~ 请先在设置中配置 API 地址和密钥。", "failed")
                 return
             }
 
             try {
                 val reply = callAI(apiUrl, apiKey, model, systemPrompt, noteContent)
-                saveReply(context, mailId, reply)
+                saveReply(context, mailId, reply, "replied")
             } catch (e: Exception) {
                 Log.e(TAG, "AI reply failed for mail $mailId", e)
-                saveReply(context, mailId, "抱歉，回信过程中遇到了问题，请稍后再试。")
+                saveReply(context, mailId, "抱歉，回信过程中遇到了问题，请稍后再试。", "failed")
             }
         }
 
@@ -58,6 +58,10 @@ class MailWorker {
             connection.requestMethod = "POST"
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Authorization", "Bearer $apiKey")
+            // OpenCode Zen 端点要求会话路由头
+            if (URL(url).host.endsWith("opencode.ai")) {
+                connection.setRequestProperty("x-opencode-session", "niannote-mail-" + System.currentTimeMillis())
+            }
             connection.doOutput = true
             connection.connectTimeout = 30000
             connection.readTimeout = 60000
@@ -117,7 +121,7 @@ class MailWorker {
             return if (raw.isEmpty()) JSONObject() else JSONObject(raw)
         }
 
-        private fun saveReply(context: Context, mailId: String, reply: String) {
+        private fun saveReply(context: Context, mailId: String, reply: String, status: String) {
             val prefs = context.getSharedPreferences("nian_mails", Context.MODE_PRIVATE)
             val raw = prefs.getString("mails", "[]") ?: "[]"
             val mails = JSONArray(raw)
@@ -127,13 +131,13 @@ class MailWorker {
                 if (mail.getString("id") == mailId) {
                     mail.put("reply", reply)
                     mail.put("replyAt", System.currentTimeMillis().toString())
-                    mail.put("status", if (reply.startsWith("抱歉") || reply.contains("还没配置")) "failed" else "replied")
+                    mail.put("status", status)
                     break
                 }
             }
 
             prefs.edit().putString("mails", mails.toString()).apply()
-            Log.d(TAG, "Reply saved for mail $mailId, status=${reply.take(30)}")
+            Log.d(TAG, "Reply saved for mail $mailId, status=$status, reply=${reply.take(30)}")
         }
     }
 }

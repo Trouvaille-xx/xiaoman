@@ -121,8 +121,8 @@
             selectedModeName = "AI 自主选择";
           }
 
-          // 6. 调用 LLM
-          var url = config.apiUrl.replace(/\/+$/, "") + "/chat/completions";
+          // 6. 调用 LLM（Android 走原生桥，浏览器走 XHR）
+          var url = NativeHttp.chatEndpoint(config.apiUrl);
           var payload = {
             model: config.model || "gpt-4o",
             messages: [
@@ -130,47 +130,45 @@
               { role: "user", content: "以下是我的日记内容，请进行分析：\n\n" + noteContent }
             ],
             temperature: 0.8,
-            max_tokens: 2000,
-            thinking: { type: "disabled" }
+            max_tokens: 2000
           };
 
-          var xhr = new XMLHttpRequest();
-          xhr.open("POST", url);
-          xhr.setRequestHeader("Content-Type", "application/json");
-          xhr.setRequestHeader("Authorization", "Bearer " + config.apiKey);
-          xhr.timeout = 60000;
+          var request = (typeof NativeHttp !== 'undefined')
+            ? NativeHttp.postJson(url, { Authorization: "Bearer " + config.apiKey }, payload)
+            : new Promise(function(res, rej) {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", url);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.setRequestHeader("Authorization", "Bearer " + config.apiKey);
+                xhr.timeout = 60000;
+                xhr.ontimeout = function() { rej(new Error("timeout")); };
+                xhr.onload = function() {
+                  if (xhr.status >= 200 && xhr.status < 300) {
+                    try { res(JSON.parse(xhr.responseText)); }
+                    catch(e) { rej(new Error("parse: " + e.message)); }
+                  } else {
+                    rej(new Error("http " + xhr.status));
+                  }
+                };
+                xhr.onerror = function() { rej(new Error("network")); };
+                xhr.send(JSON.stringify(payload));
+              });
 
-          xhr.ontimeout = function() {
-            resolve({ error: "洞察分析超时" });
-          };
-
-          xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                var data = JSON.parse(xhr.responseText);
-                var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                if (text) {
-                  text = text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<\/?think>/gi, "").trim();
-                  resolve({
-                    modeName: selectedModeName,
-                    analysis: text
-                  });
-                } else {
-                  resolve({ error: "AI 返回了空结果" });
-                }
-              } catch(e) {
-                resolve({ error: "解析失败: " + e.message });
-              }
+          request.then(function(data) {
+            var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            if (text) {
+              text = text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<\/?think>/gi, "").trim();
+              resolve({
+                modeName: selectedModeName,
+                analysis: text
+              });
             } else {
-              resolve({ error: "API 请求失败: HTTP " + xhr.status });
+              resolve({ error: "AI 返回了空结果" });
             }
-          };
-
-          xhr.onerror = function() {
-            resolve({ error: "网络请求失败" });
-          };
-
-          xhr.send(JSON.stringify(payload));
+          }, function(e) {
+            var msg = e && e.message === "timeout" ? "洞察分析超时" : "网络请求失败";
+            resolve({ error: msg });
+          });
         } catch(e) {
           resolve({ error: e.message });
         }

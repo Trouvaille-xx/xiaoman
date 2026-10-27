@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [NoteEntity::class, ImageEntity::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
@@ -24,7 +24,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nian_database"
-                ).build()
+                )
+                    // 无迁移策略时兜底重建，避免 schema 变更后升级崩溃（镜像数据可从 JS 侧重建）
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

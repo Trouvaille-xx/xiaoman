@@ -1,5 +1,5 @@
 // ─── create_note Skill ───
-// 让念念能帮用户记录笔记
+// 让小满能帮用户记录笔记
 (function() {
   window.createNoteSkill = {
     definition: {
@@ -23,8 +23,8 @@
       }
 
       var content = args.content.trim();
-      if (content.indexOf("#念念记") === -1) {
-        content = content + "\n\n#念念记";
+      if (content.indexOf("#小满记") === -1 && content.indexOf("#念念记") === -1) {
+        content = content + "\n\n#小满记";
       }
 
       // 优先走桥接函数（同步到 UI）

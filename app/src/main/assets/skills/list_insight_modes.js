@@ -1,5 +1,5 @@
 // ─── list_insight_modes Skill ───
-// 让念念了解有哪些洞察模式可用
+// 让小满了解有哪些洞察模式可用
 (function() {
   window.listInsightModesSkill = {
     definition: {

@@ -74,38 +74,16 @@
         },
         settings: {
             save: function(data) {
-                // 先读出现有配置，合并后再保存（保护 auth token 不被覆盖）
-                var existing = {};
-                try {
-                    var raw = hasBridge ? AndroidSettings.loadSettings() : localStorage.getItem('nian_settings');
-                    if (raw) existing = JSON.parse(raw);
-                } catch(e) {}
-                var merged = Object.assign(existing, data);
-                // 剥离 apiUrl/apiKey/model —— 这些由后端 + token 提供，不持久化在 settings 里
-                delete merged.apiUrl;
-                delete merged.apiKey;
-                delete merged.model;
                 if (hasBridge) {
-                    AndroidSettings.saveSettings(JSON.stringify(merged));
+                    AndroidSettings.saveSettings(JSON.stringify(data));
                 } else {
-                    try { localStorage.setItem('nian_settings', JSON.stringify(merged)); } catch(e) {}
+                    try { localStorage.setItem('nian_settings', JSON.stringify(data)); } catch(e) {}
                 }
             },
             load: function() {
                 try {
                     var raw = hasBridge ? AndroidSettings.loadSettings() : localStorage.getItem('nian_settings');
-                    var settings = raw ? JSON.parse(raw) : {};
-                    // 剥离老版本残留的 apiUrl/apiKey/model —— 这些必须从后端 + token 拿，不持久化
-                    delete settings.apiUrl;
-                    delete settings.apiKey;
-                    delete settings.model;
-                    // 注入后端地址和 token（从 BuildConfig 烧入的 url + getNianToken）
-                    settings.apiUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
-                    settings.apiKey = window.getNianToken ? window.getNianToken() : '';
-                    // 同步缓存到 localStorage，让 memory 页面也能读到
-                    try { if (settings.apiKey) localStorage.setItem('nian_token_cache', settings.apiKey); } catch(e) {}
-                    settings.model = 'deepseek-v4-flash';
-                    return settings;
+                    return raw ? JSON.parse(raw) : null;
                 } catch(e) { return null; }
             }
         }
@@ -124,45 +102,123 @@ if (typeof AndroidStorage === 'undefined') {
         }
         // ─── Agent 初始化 ───
         var nianAgent = null;
+        // 工具开关（Win 后台导出 app-config.js 的 tools.enabled 控制；缺省 = 全部启用）
+        var enabledTools = null;
+        try {
+            var runtimeCfg = (typeof window !== 'undefined' && window.NIAN_CONFIG) || {};
+            if (runtimeCfg.tools && Array.isArray(runtimeCfg.tools.enabled)) {
+                enabledTools = runtimeCfg.tools.enabled;
+            }
+        } catch(e) {}
+
+        function isToolEnabled(name) {
+            return !enabledTools || enabledTools.indexOf(name) !== -1;
+        }
+
         function initAgent() {
           if (typeof NianAgent === "undefined") return;
           nianAgent = new NianAgent();
-          if (typeof searchNotesSkill !== "undefined") {
-            nianAgent.registerSkill(searchNotesSkill);
-          }
-          if (typeof listInsightModesSkill !== "undefined") {
-            nianAgent.registerSkill(listInsightModesSkill);
-          }
-          if (typeof runInsightSkill !== "undefined") {
-            nianAgent.registerSkill(runInsightSkill);
-          }
-          if (typeof createNoteSkill !== "undefined") {
-            nianAgent.registerSkill(createNoteSkill);
-          }
-          if (typeof getWeatherSkill !== "undefined") {
-            nianAgent.registerSkill(getWeatherSkill);
-          }
-          if (typeof webSearchSkill !== "undefined") {
-            nianAgent.registerSkill(webSearchSkill);
-          }
-          if (typeof sendProactiveMailSkill !== "undefined") {
-            nianAgent.registerSkill(sendProactiveMailSkill);
-          }
-          if (typeof updateArchiveSkill !== "undefined") {
-            nianAgent.registerSkill(updateArchiveSkill);
+          var regs = [
+            ['searchNotesSkill', 'search_notes'],
+            ['getNoteSkill', 'get_note'],
+            ['listInsightModesSkill', 'list_insight_modes'],
+            ['runInsightSkill', 'run_insight'],
+            ['createNoteSkill', 'create_note'],
+            ['getWeatherSkill', 'get_weather'],
+            ['webSearchSkill', 'web_search'],
+            ['sendProactiveMailSkill', 'send_proactive_mail'],
+            ['updateArchiveSkill', 'update_archive'],
+            ['rememberToSkill', 'remember_to'],
+            ['noteStatsSkill', 'note_stats'],
+            ['dailyReviewSkill', 'daily_review'],
+            ['specialDaySkill', 'get_special_day'],
+            ['generateNoteImageSkill', 'generate_note_image'],
+            ['penpalWeeklyLetterSkill', 'penpal_weekly_letter']
+          ];
+          for (var ri = 0; ri < regs.length; ri++) {
+            var globalName = regs[ri][0];
+            var toolName = regs[ri][1];
+            if (typeof window[globalName] !== 'undefined' && isToolEnabled(toolName)) {
+              nianAgent.registerSkill(window[globalName]);
+            }
           }
         }
         initAgent();
         // loadConversations();
 
+        // ─── 遥测日志上报（Win 后台查看执行过程；浏览器 POST，Android 走原生桥）───
+        function sendTelemetry(log) {
+            try {
+                var cfg = (typeof window !== 'undefined' && window.NIAN_CONFIG) || {};
+                if (!cfg.telemetry || !cfg.telemetry.url) return;
+                var payload = JSON.stringify([log]);
+                if (typeof NativeHttp !== 'undefined' && typeof AndroidHttp !== 'undefined') {
+                    NativeHttp.postJson(cfg.telemetry.url, {}, payload).catch(function() {});
+                } else if (typeof fetch === 'function') {
+                    fetch(cfg.telemetry.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(function() {});
+                }
+            } catch(e) {}
+        }
+
+        // ─── 提醒心跳扫描：启动后 + 每 30 分钟检查到期提醒，小满主动发信 ───
+        function scanDueReminders() {
+            try {
+                if (typeof MemoryService === 'undefined' || typeof MemoryService.dueReminders !== 'function') return;
+                if (typeof sendProactiveMailSkill === 'undefined') return;
+                var due = MemoryService.dueReminders();
+                if (!due.length) return;
+                var reminders = MemoryService.loadReminders();
+                var changed = false;
+                for (var i = 0; i < reminders.length; i++) {
+                    var r = reminders[i];
+                    if (r.done) continue;
+                    var isDue = false;
+                    for (var di = 0; di < due.length; di++) {
+                        if (due[di].id === r.id) { isDue = true; break; }
+                    }
+                    if (isDue) {
+                        try {
+                            sendProactiveMailSkill.execute({ subject: '小满的提醒', message: r.text });
+                        } catch(e) {}
+                        r.done = true;
+                        changed = true;
+                    }
+                }
+                if (changed) MemoryService.saveReminders(reminders);
+            } catch(e) {}
+        }
+        setTimeout(scanDueReminders, 8000);
+        setInterval(scanDueReminders, 30 * 60 * 1000);
+        // 情绪感知关怀：与提醒同频扫描，检测到最近情绪低落时小满主动来信
+        setTimeout(scanMoodCare, 15000);
+        setInterval(scanMoodCare, 30 * 60 * 1000);
+
+        // ─── 笔友周信定时扫描：启动后延迟 + 每 6 小时检查一次，
+        // 距上次周信 ≥7 天且有可回顾笔记时，随机一位笔友来信 ───
+        function scanWeeklyLetter() {
+            try {
+                if (typeof penpalWeeklyLetterSkill === 'undefined') return;
+                var s = DataService.settings.load();
+                if (!s) return;
+                var last = s.lastWeeklyLetterAt ? parseInt(s.lastWeeklyLetterAt, 10) : 0;
+                if (last && (Date.now() - last) < 7 * 24 * 60 * 60 * 1000) return;
+                // 有最近 7 天的笔记才发，避免空周信
+                penpalWeeklyLetterSkill.execute({}).then(function(result) {
+                    if (result && result.success) showToast(result.message);
+                });
+            } catch(e) {}
+        }
+        setTimeout(scanWeeklyLetter, 20000);
+        setInterval(scanWeeklyLetter, 6 * 60 * 60 * 1000);
+
         // ─── Agent 创建的笔记同步到 UI ───
         window.__agentCreateNote = function(content) {
-          var note = { id: "note_" + Date.now(), content: content, createdAt: new Date().toISOString() };
+          var note = { id: "note_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8), content: content, createdAt: new Date().toISOString() };
           notes.unshift(note);
           persistNotes();
           updateSidebarStats();
           renderHeatmap();
-          showToast('念念为你记了一条笔记');
+          showToast('小满为你记了一条笔记');
           if (currentPage === 'notes') {
             renderNotes(currentTagFilter);
             setTimeout(loadNoteImages, 100);
@@ -193,30 +249,149 @@ var INSIGHT_SCENARIOS = [
     { id: "growth", name: "成长规划", desc: "有目标但不知道怎么落地，想找到行动方向" }
 ];
 var INSIGHT_MODES = [
+    { id: "chat", name: "对话式", desc: "小满像朋友一样边聊边分析，可追问、可展开" },
     { id: "direct", name: "直接输出", desc: "一次性输出完整分析报告" },
-    { id: "chat", name: "苏格拉底追问", desc: "念念像朋友一样边聊边分析，可追问、可展开" }
+    { id: "socratic", name: "苏格拉底追问", desc: "AI 只提问不给答案，引导用户自己找到答案" }
 ];
 var insightPickerState = { step: 0, noteId: null, scenario: null };
 
+// 存储结构：索引 key 只存元信息；每个对话单独一个 key 存消息。
+// 单个对话数据损坏只影响它自己，不会连累整份历史。
+var CONV_INDEX_KEY = 'nian_conv_index';
+var CONV_PREFIX = 'nian_conv_';
+var CONV_CURRENT_KEY = 'nian_conv_current';
+var CONV_LEGACY_KEY = 'nian_conversations';
+var REF_MARKER = '\n\n[引用笔记]\n';
+
 function loadConversations() {
+    conversations = [];
+
+    // 1) 按索引逐个读回对话
+    var index = null;
     try {
-        var raw = localStorage.getItem('nian_conversations');
-        conversations = raw ? JSON.parse(raw) : [];
-    } catch(e) { conversations = []; }
+        var rawIndex = localStorage.getItem(CONV_INDEX_KEY);
+        if (rawIndex) index = JSON.parse(rawIndex);
+    } catch(e) { index = null; }
+
+    if (index && index.length) {
+        for (var i = 0; i < index.length; i++) {
+            var meta = index[i];
+            if (!meta || !meta.id) continue;
+            var conv = null;
+            try {
+                var rawConv = localStorage.getItem(CONV_PREFIX + meta.id);
+                if (rawConv) conv = JSON.parse(rawConv);
+            } catch(e) { conv = null; }
+            if (conv && conv.id) {
+                if (!conv.messages) conv.messages = [];
+                conversations.push(conv);
+            } else {
+                // 该对话缺失或损坏：用索引元信息兜底，并标记 damaged，
+                // 后续保存时跳过它，避免用空消息覆盖可能还能恢复的原始数据
+                conversations.push({
+                    id: meta.id,
+                    title: meta.title || '新的对话',
+                    messages: [],
+                    createdAt: meta.createdAt,
+                    updatedAt: meta.updatedAt,
+                    __damaged: true
+                });
+            }
+        }
+    }
+
+    // 2) 新格式没有数据时，尝试从旧版单 key 迁移
+    if (conversations.length === 0) {
+        conversations = migrateLegacyConversations();
+    }
+
+    // 3) 确认两条路都没有数据，才新建空对话。
+    //    关键改动：读取/解析失败不再立刻写回空数据（旧逻辑会借此覆盖全部历史）。
     if (conversations.length === 0) {
         var id = 'conv_' + Date.now();
         conversations.push({ id: id, title: '新的对话', messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         currentConvId = id;
         saveConversations();
     } else {
-        currentConvId = conversations[0].id;
+        // 优先恢复上次打开的那个对话，找不到再退回第一条
+        var savedCur = null;
+        try { savedCur = localStorage.getItem(CONV_CURRENT_KEY); } catch(e) {}
+        var exists = false;
+        for (var k = 0; k < conversations.length; k++) {
+            if (conversations[k].id === savedCur) { exists = true; break; }
+        }
+        currentConvId = exists ? savedCur : conversations[0].id;
     }
+
     var conv = getCurrentConv();
     if (conv) nianMessages = conv.messages;
 }
 
+// 旧版迁移：读 nian_conversations，拆成新格式写盘；旧 key 保留作备份不删除
+function migrateLegacyConversations() {
+    var legacy = null;
+    try {
+        var raw = localStorage.getItem(CONV_LEGACY_KEY);
+        if (!raw) return [];
+        legacy = JSON.parse(raw);
+    } catch(e) { return []; }
+    if (!legacy || !legacy.length) return [];
+
+    var out = [];
+    var index = [];
+    for (var i = 0; i < legacy.length; i++) {
+        var c = legacy[i];
+        if (!c || !c.id) continue;
+        if (!c.messages) c.messages = [];
+        out.push(c);
+        index.push({
+            id: c.id,
+            title: c.title || '新的对话',
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt,
+            msgCount: c.messages.length
+        });
+        try { localStorage.setItem(CONV_PREFIX + c.id, JSON.stringify(c)); } catch(e) {}
+    }
+    if (out.length) {
+        try { localStorage.setItem(CONV_INDEX_KEY, JSON.stringify(index)); } catch(e) {}
+        if (window.console) console.log('[conversation] 已从旧格式迁移', out.length, '个对话');
+    }
+    return out;
+}
+
 function saveConversations() {
-    try { localStorage.setItem('nian_conversations', JSON.stringify(conversations)); } catch(e) {}
+    if (!conversations || !conversations.length) return;
+    var index = [];
+    for (var i = 0; i < conversations.length; i++) {
+        var c = conversations[i];
+        if (!c || !c.id) continue;
+        index.push({
+            id: c.id,
+            title: c.title || '新的对话',
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt,
+            msgCount: (c.messages || []).length
+        });
+        if (c.__damaged) continue;
+        try {
+            localStorage.setItem(CONV_PREFIX + c.id, JSON.stringify({
+                id: c.id,
+                title: c.title || '新的对话',
+                messages: c.messages || [],
+                summary: c.summary,
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt
+            }));
+        } catch(e) {
+            if (window.console) console.warn('[conversation] 对话保存失败:', c.id, e);
+        }
+    }
+    try {
+        localStorage.setItem(CONV_INDEX_KEY, JSON.stringify(index));
+    } catch(e) {
+        if (window.console) console.warn('[conversation] 索引保存失败:', e);
+    }
 }
 
 function getCurrentConv() {
@@ -227,22 +402,78 @@ function getCurrentConv() {
 }
 
 function newConversation() {
-    var id = 'conv_' + Date.now();
+    var id = 'conv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     conversations.unshift({ id: id, title: '新的对话', messages: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     currentConvId = id;
     nianMessages = conversations[0].messages;
+    try { localStorage.setItem(CONV_CURRENT_KEY, id); } catch(e) {}
     saveConversations();
     closeHistoryPanel();
     renderNianMessages();
+    if (typeof window.resetAgentContext === 'function') window.resetAgentContext(nianMessages, undefined);
 }
 
 function switchToConversation(id) {
     currentConvId = id;
     var conv = getCurrentConv();
     if (conv) nianMessages = conv.messages;
+    try { localStorage.setItem(CONV_CURRENT_KEY, id); } catch(e) {}
     renderNianMessages();
     renderHistoryList();
     saveConversations();
+    // 切换对话时同步 agent 上下文（限长重建 + 恢复摘要），避免旧对话消息污染新对话
+    if (typeof window.resetAgentContext === 'function') window.resetAgentContext(nianMessages, conv ? conv.summary : undefined);
+}
+
+// 把消息内容拆成「气泡里的话」和「引用的笔记正文」
+// 存储格式没变（正文仍跟在 [引用笔记] 标记后，AI 上下文照旧完整），
+// 只在渲染时剥离出来折叠，历史旧消息也能自动获得折叠效果。
+function splitRefNote(content) {
+    var s = content || '';
+    var i = s.indexOf(REF_MARKER);
+    if (i < 0) return { text: s, ref: null };
+    return { text: s.substring(0, i), ref: s.substring(i + REF_MARKER.length) };
+}
+
+// 引用笔记折叠条：默认收起，点击展开/收起全文
+function buildRefChip(refText) {
+    var firstLine = (refText.split('\n')[0] || '').replace(/\s+/g, ' ').trim();
+    var preview = firstLine.length > 40 ? firstLine.substring(0, 40) + '…' : firstLine;
+    var wrap = document.createElement('div');
+    wrap.className = 'nian-ref-chip-wrap';
+
+    var chip = document.createElement('div');
+    chip.className = 'nian-ref-chip';
+    chip.innerHTML = '<span class="nian-ref-chip-arrow">▸</span>'
+        + '<span class="nian-ref-chip-title">引用笔记</span>'
+        + '<span class="nian-ref-chip-preview">' + escapeHtml(preview) + '</span>';
+    chip.onclick = function() {
+        var open = wrap.classList.toggle('open');
+        var arrow = chip.querySelector('.nian-ref-chip-arrow');
+        if (arrow) arrow.textContent = open ? '▾' : '▸';
+    };
+    wrap.appendChild(chip);
+
+    var body = document.createElement('div');
+    body.className = 'nian-ref-body';
+    body.textContent = refText;
+    wrap.appendChild(body);
+    return wrap;
+}
+
+// 渲染一条用户消息：气泡在上，引用笔记折叠条在气泡下方
+function renderUserMessageEl(el, rawContent) {
+    var parts = splitRefNote(rawContent);
+    var stack = document.createElement('div');
+    stack.className = 'nian-msg-stack';
+
+    var bubble = document.createElement('div');
+    bubble.className = 'nian-message-text';
+    bubble.innerHTML = escapeHtml(parts.text);
+    stack.appendChild(bubble);
+
+    if (parts.ref) stack.appendChild(buildRefChip(parts.ref));
+    el.appendChild(stack);
 }
 
 function renderNianMessages() {
@@ -253,7 +484,7 @@ function renderNianMessages() {
     if (!conv || conv.messages.length === 0) {
         var msg = document.createElement('div');
         msg.className = 'nian-message assistant';
-        msg.innerHTML = '<div class="nian-message-text">你好呀！我是念念，你的 AI 日记伴侣。有什么想和我分享的吗？</div>';
+        msg.innerHTML = '<div class="nian-message-text">你好呀！我是小满，你的 AI 日记伴侣。有什么想和我分享的吗？</div>';
         container.appendChild(msg);
         return;
     }
@@ -263,7 +494,7 @@ function renderNianMessages() {
         var el = document.createElement('div');
         el.className = 'nian-message ' + (m.role === 'user' ? 'user' : 'assistant');
         if (m.role === 'user') {
-            el.innerHTML = '<div class="nian-message-text">' + escapeHtml(m.content || '') + '</div>';
+            renderUserMessageEl(el, m.content || '');
         } else {
             el.innerHTML = '<div class="nian-message-text">' + renderThinkContent(m.content || '') + '</div>';
         }
@@ -300,10 +531,38 @@ function renderHistoryList() {
 
 loadConversations();
 
+// 冷启动时把上次打开的对话渲染出来。
+// 否则页面会一直停在 HTML 里写死的欢迎气泡，看起来像「历史没存」。
+function renderInitialConversation() {
+    try { renderNianMessages(); } catch(e) { if (window.console) console.warn('[conversation] 初始渲染失败:', e); }
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderInitialConversation);
+} else {
+    renderInitialConversation();
+}
+
+// 对话页激活时给 .content 加标记类，用于收窄底部留白（让输入面板下沉）。
+// 用观察者而不是改 switchToXxx 里的每一处 active 切换，避免漏改。
+(function syncChatActiveClass() {
+    var content = document.getElementById('appContent');
+    var page = document.getElementById('nianPage');
+    if (!content || !page) return;
+    function sync() {
+        if (page.classList.contains('active')) content.classList.add('chat-active');
+        else content.classList.remove('chat-active');
+    }
+    try {
+        new MutationObserver(sync).observe(page, { attributes: true, attributeFilter: ['class'] });
+    } catch(e) {}
+    sync();
+})();
+
 function deleteConversation(id) {
     if (conversations.length <= 1) { showToast('至少保留一个对话'); return; }
     conversations = conversations.filter(function(c) { return c.id !== id; });
     if (currentConvId === id) currentConvId = conversations[0].id;
+    try { localStorage.removeItem(CONV_PREFIX + id); } catch(e) {}
     saveConversations();
     switchToConversation(currentConvId);
 }
@@ -325,14 +584,14 @@ function openNotePicker() {
     if (notes.length === 0) {
         container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:14px">暂无笔记</div>';
     } else {
-        var recent = notes.slice();
+        var recent = notes.slice(0, 20);
         for (var i = 0; i < recent.length; i++) {
             (function(note) {
                 var preview = (note.content || '').replace(/<[^>]+>/g, '').substring(0, 50);
                 var date = (note.createdAt || '').substring(0, 10);
                 var div = document.createElement('div');
                 div.className = 'penpal-sheet-item';
-                div.innerHTML = '<div class="np-date">' + date + '</div><div class="np-text">' + escapeHtml(preview) + '</div>';
+                div.innerHTML = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">' + date + '</div><div style="font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(preview) + '</div>';
                 div.onclick = function() { selectNote(note); };
                 container.appendChild(div);
             })(recent[i]);
@@ -351,76 +610,64 @@ function closeNotePicker() {
     if (s) s.classList.remove('open');
 }
 
-// ── 发信到笔友 (app.html 作用域, 从笔记菜单 "发信" 调用) ──
-var penpals = [
-    { id: "nian", name: "念念", emoji: "💭", color: "#e85d04", personality: "你的 AI 生活伴侣", systemPrompt: "" },
-    { id: "xiaonuan", name: "小暖", emoji: "暖", color: "#FF8FA3", personality: "温柔善良，善解人意", systemPrompt: "你是一个温暖贴心的笔友，擅长倾听和共情。用温柔的语言回应对方的分享，让对方感到被理解和关心。" },
-    { id: "aran", name: "阿燃", emoji: "燃", color: "#FF6B35", personality: "热血奋进，永不服输", systemPrompt: "你是一个热血澎湃的笔友，充满斗志和正能量。面对困难时鼓舞对方，但不空喊口号——给出具体的行动建议。" },
-    { id: "shubai", name: "书白", emoji: "书", color: "#4A6FA5", personality: "博学睿智，冷静通透", systemPrompt: "你是一个学识渊博的笔友，善于从书中典故、历史经验中举一反三。用理性的角度剖析问题，给出发人深省的见解。" },
-    { id: "momo", name: "墨墨", emoji: "墨", color: "#9B59B6", personality: "浪漫文艺，天马行空", systemPrompt: "你是一个浪漫不羁的笔友，用诗意的语言和跳跃的思维回应。不按套路出牌，偶尔带点黑色幽默和文艺腔。" }
-];
-var pendingNoteContent = '';
-
-function getPenpal(id) {
-    for (var i = 0; i < penpals.length; i++) { if (penpals[i].id === id) return penpals[i]; }
-    return null;
-}
-
-function openPenpalSheet(noteContent) {
-    pendingNoteContent = noteContent;
-    var list = document.getElementById('penpalSheetList');
-    if (!list) return;
-    list.innerHTML = penpals.map(function(p) {
-        return '<div class="penpal-sheet-item" onclick="confirmSend(\'' + p.id + '\')">' +
-            '<div class="penpal-sheet-avatar" style="background:' + p.color + '20">' + p.emoji + '</div>' +
-            '<div class="penpal-sheet-name" style="color:' + p.color + '">' + p.name + '</div>' +
-            '<div class="penpal-sheet-personality">' + p.personality + '</div></div>';
-    }).join('');
-    document.getElementById('penpalSheetOverlay').classList.add('open');
-    document.getElementById('penpalSheet').classList.add('open');
-}
-
-function closePenpalSheet() {
-    document.getElementById('penpalSheetOverlay').classList.remove('open');
-    document.getElementById('penpalSheet').classList.remove('open');
-    pendingNoteContent = '';
-}
-
-function confirmSend(penpalId) {
-    if (!pendingNoteContent) return;
-    // 注入云端 API 配置
-    var backendUrl = (window.__NianBackend && window.__NianBackend.url) || 'http://115.159.116.240:3456/v1';
-    var token = window.getNianToken ? window.getNianToken() : '';
-    if (token && typeof AndroidSettings !== 'undefined') {
-        var raw = AndroidSettings.loadSettings();
-        var s = raw ? JSON.parse(raw) : {};
-        s.apiUrl = backendUrl;
-        s.apiKey = token;
-        s.model = 'deepseek-v4-flash';
-        AndroidSettings.saveSettings(JSON.stringify(s));
-    }
-    var pp = getPenpal(penpalId);
-    if (typeof AndroidMail !== 'undefined' && pp) {
-        AndroidMail.sendMail(pendingNoteContent, penpalId, pp.name, pp.systemPrompt);
-    }
-    closePenpalSheet();
-    showToast('已寄给 ' + (pp ? pp.name : '笔友') + '，等待回信 ✉️');
+// 笔记正文统一转纯文本：先把 HTML 的换行标记换成真换行，再剥标签。
+// 直接 replace(/<[^>]+>/g,'') 会把 <br>、</p> 一起吃掉，原本分段的内容
+// 会被缝成一大坨，看起来就像"展示不全 / 串行"。
+function plainNoteText(html) {
+    return (html || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|h[1-6]|blockquote|tr)>/gi, '\n')
+        .replace(/<[^>]+>/g, '');
 }
 
 function selectNote(note) {
     closeNotePicker();
     referencedNote = note;
-    var preview = (note.content || '').replace(/<[^>]+>/g, '').substring(0, 60);
     var date = (note.createdAt || '').substring(0, 10);
+    var full = plainNoteText(note.content).replace(/\n{3,}/g, '\n\n').trim();
     var el = document.getElementById('nianRefPreview');
     if (el) {
         var txt = el.querySelector('.nian-ref-preview-text');
-        if (txt) txt.textContent = '📎 ' + date + ' "' + preview + '"';
-        el.style.display = 'flex';
+        // 摘要条只显示两行（换行压成空格交给 CSS 截断），全文点开弹层看
+        if (txt) txt.textContent = '📎 ' + date + ' ' + full.replace(/\s+/g, ' ');
+        el.style.display = 'block';
     }
 }
 
+// 点预览条 → 底部弹层显示笔记全文。
+// 不用在输入框上方原地展开：这条 538 字的笔记正文高 794px，
+// 而屏幕只有 914px，原位展开必然把消息区压扁、把输入框挤出屏幕。
+function openRefNoteSheet() {
+    if (!referencedNote) return;
+    // 键盘没关时弹层会落在键盘后面：布局视口高度不变，fixed 底部就被挡住了。
+    // 先让输入框失焦收起键盘，再弹层。
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+    }
+    var full = plainNoteText(referencedNote.content).replace(/\n{3,}/g, '\n\n').trim();
+    var date = (referencedNote.createdAt || '').substring(0, 10);
+    var body = document.getElementById('refNoteSheetBody');
+    var meta = document.getElementById('refNoteSheetMeta');
+    if (body) body.textContent = full;
+    if (meta) meta.textContent = date + ' · 共 ' + full.replace(/\s/g, '').length + ' 字';
+    var o = document.getElementById('refNoteOverlay');
+    var s = document.getElementById('refNoteSheet');
+    if (o) o.classList.add('open');
+    if (s) {
+        s.classList.add('open');
+        if (body) body.scrollTop = 0;
+    }
+}
+
+function closeRefNoteSheet() {
+    var o = document.getElementById('refNoteOverlay');
+    var s = document.getElementById('refNoteSheet');
+    if (o) o.classList.remove('open');
+    if (s) s.classList.remove('open');
+}
+
 function clearNoteReference() {
+    closeRefNoteSheet();
     referencedNote = null;
     var el = document.getElementById('nianRefPreview');
     if (el) el.style.display = 'none';
@@ -429,69 +676,19 @@ function clearNoteReference() {
 // ─── 洞察模式 ───
 function enterInsightMode() {
     openInsightPicker(false, null);
-    enterInsightModeUI();  // 一进入洞察模式就展示回退按钮
 }
 
 function enterInsightModeUI() {
+    // 洞察的选择与结果都直接在对话里完成，不再改动页面结构
     isInsightMode = true;
-    var page = document.getElementById('nianPage');
-    if (page) page.classList.add('insight-mode');
-    var brand = document.getElementById('headerBrand');
-    if (brand) brand.textContent = '洞察模式';
-    var exitBtn = document.getElementById('insightExitBtn');
-    if (exitBtn) exitBtn.style.display = 'flex';
-    var hamburger = document.querySelector('#appHeader > .header-icon:nth-of-type(1)');
-    if (hamburger) hamburger.style.display = 'none';
 }
 
 function exitInsightMode() {
+    // 仅清理选择器状态，页面本身不做任何变化
     var el = document.getElementById('insightPicker');
     if (el) el.style.display = 'none';
     insightPickerState = { step: 0, noteId: null, scenario: null };
     isInsightMode = false;
-    var page = document.getElementById('nianPage');
-    if (page) page.classList.remove('insight-mode');
-    var input = document.getElementById('nianChatInput');
-    if (input) input.placeholder = '输入消息...';
-    var brand = document.getElementById('headerBrand');
-    if (brand) brand.textContent = '念念';
-    // 恢复汉堡图标，隐藏回退按钮
-    var exitBtn = document.getElementById('insightExitBtn');
-    if (exitBtn) exitBtn.style.display = 'none';
-    var hamburger = document.querySelector('#appHeader > .header-icon');
-    if (hamburger) { hamburger.style.display = ''; hamburger.setAttribute('onclick', 'toggleSidebar()'); }
-    // 恢复底部导航
-    var bn = document.querySelector('.bottom-nav');
-    if (bn) bn.style.display = '';
-    // 恢复聊天选项
-    var options = document.getElementById('nianChatOptions');
-    if (options) options.style.display = '';
-    // 恢复历史图标
-    var hi = document.getElementById('historyIcon');
-    if (hi) hi.style.display = '';
-    // 恢复 headerRight
-    var hr = document.getElementById('headerRight');
-    if (hr) hr.style.display = '';
-    var conv = getCurrentConv();
-    if (conv && conv.messages.length > 2) {
-        var insightConv = {
-            id: 'conv_' + Date.now(),
-            title: '洞察分析',
-            messages: JSON.parse(JSON.stringify(conv.messages)),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-        conversations.unshift(insightConv);
-        saveConversations();
-    }
-    var container = document.getElementById('nianChatMessages');
-    if (container) {
-        var msg = document.createElement('div');
-        msg.className = 'nian-message assistant';
-        msg.innerHTML = '<div class="nian-message-text" style="border-left:3px solid #7c5cbf;padding-left:10px;margin:8px 0">📋 洞察总结:<br>洞察分析已完成。完整记录已保存到对话历史。</div>';
-        container.appendChild(msg);
-        scrollToBottom();
-    }
 }
 
 // ─── 洞察选择器 ───
@@ -506,7 +703,6 @@ function openInsightPicker(fromMenu, noteId) {
     } else {
         showInsightNotes();
     }
-    enterInsightModeUI();  // 确保回退按钮出来
 }
 
 function closeInsightPicker() {
@@ -517,11 +713,6 @@ function closeInsightPicker() {
     var el = document.getElementById('insightPicker');
     if (el) el.style.display = 'none';
     insightPickerState = { step: 0, noteId: null, scenario: null };
-}
-
-function closeInsightHub() {
-    var page = document.getElementById('insightHubPage');
-    if (page) page.classList.remove('active');
 }
 
 function goBackInsightStep() {
@@ -578,11 +769,7 @@ function recommendScenarios(noteId) {
     try { config = DataService.settings.load(); } catch(e) {}
     if (!config || !config.apiUrl || !config.apiKey) { showInsightScenarios(); return; }
 
-    var url = config.apiUrl.replace(/\/+$/, '');
-    if (!url.endsWith('/chat/completions')) {
-        if (url.endsWith('/v1')) url += '/chat/completions';
-        else if (!url.includes('/chat/completions')) url += '/chat/completions';
-    }
+    var url = NativeHttp.chatEndpoint(config.apiUrl);
 
     var scenarioList = INSIGHT_SCENARIOS.map(function(s, idx) {
         return (idx + 1) + '. ' + s.name + '：' + s.desc;
@@ -599,36 +786,48 @@ function recommendScenarios(noteId) {
     };
 
     try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', url);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('Authorization', 'Bearer ' + config.apiKey);
-        xhr.timeout = 10000;
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                    if (text) {
-                        var nums = text.match(/\d+/g);
-                        if (nums && nums.length > 0) {
-                            var recommended = [];
-                            for (var ni = 0; ni < nums.length && recommended.length < 3; ni++) {
-                                var idx = parseInt(nums[ni]) - 1;
-                                if (idx >= 0 && idx < INSIGHT_SCENARIOS.length && recommended.indexOf(idx) === -1) {
-                                    recommended.push(idx);
-                                }
-                            }
-                            if (recommended.length > 0) { showInsightScenarios(recommended); return; }
-                        }
+        // Android 走原生桥（无 CORS），浏览器走 XHR
+        var request = (typeof NativeHttp !== 'undefined')
+            ? NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, payload)
+            : new Promise(function(resolve) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', url);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('Authorization', 'Bearer ' + config.apiKey);
+                xhr.timeout = 10000;
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try { resolve(JSON.parse(xhr.responseText)); }
+                        catch(e) { resolve(null); }
+                    } else {
+                        resolve(null);
                     }
-                } catch(e) {}
-            }
+                };
+                xhr.onerror = function() { resolve(null); };
+                xhr.ontimeout = function() { resolve(null); };
+                xhr.send(JSON.stringify(payload));
+            });
+
+        request.then(function(data) {
+            if (!data) { showInsightScenarios(); return; }
+            try {
+                var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                if (text) {
+                    var nums = text.match(/\d+/g);
+                    if (nums && nums.length > 0) {
+                        var recommended = [];
+                        for (var ni = 0; ni < nums.length && recommended.length < 3; ni++) {
+                            var idx = parseInt(nums[ni]) - 1;
+                            if (idx >= 0 && idx < INSIGHT_SCENARIOS.length && recommended.indexOf(idx) === -1) {
+                                recommended.push(idx);
+                            }
+                        }
+                        if (recommended.length > 0) { showInsightScenarios(recommended); return; }
+                    }
+                }
+            } catch(e) {}
             showInsightScenarios();
-        };
-        xhr.onerror = function() { showInsightScenarios(); };
-        xhr.ontimeout = function() { showInsightScenarios(); };
-        xhr.send(JSON.stringify(payload));
+        }, function() { showInsightScenarios(); });
     } catch(e) { showInsightScenarios(); }
 }
 
@@ -720,67 +919,40 @@ function executeInsight(modeId) {
         errMsg.className = 'nian-message assistant';
         errMsg.innerHTML = '<div class="nian-message-text">请先在设置中配置 AI 参数（API 地址、密钥、模型）</div>';
         container.appendChild(errMsg);
+        var errConv = getCurrentConv();
+        if (errConv) {
+            errConv.messages.push({ role: 'assistant', content: '请先在设置中配置 AI 参数（API 地址、密钥、模型）' });
+            errConv.updatedAt = new Date().toISOString();
+            saveConversations();
+        }
+        exitInsightMode();
         scrollToBottom();
         return;
     }
 
     var modePrompts = {
-        'direct': '你是一个深度洞察分析师。请对用户的日记内容进行全面而深入的分析。直接输出完整的分析报告，不需要互动。分析视角：' + scenario.name + '。输出格式：使用简洁的中文，结构化呈现。'
+        'chat': '你是一个温暖的 AI 日记伴侣「小满」。请以对话的方式，对用户的日记进行深入分析。边分析边与用户互动，可以提出问题引发用户思考，也可以根据用户的回应调整分析方向。分析视角：' + scenario.name + '。',
+        'direct': '你是一个深度洞察分析师。请对用户的日记内容进行全面而深入的分析。直接输出完整的分析报告，不需要互动。分析视角：' + scenario.name + '。输出格式：使用简洁的中文，结构化呈现。',
+        'socratic': '你是一个苏格拉底式的提问者。不要给出任何答案或建议，只通过一个接一个的深度问题，引导用户自己发现答案。每个问题要直击本质，帮助用户从新的角度审视自己的日记。分析视角：' + scenario.name + '。只提问，不给答案。'
     };
-    // 构建包含工具列表的 system prompt
-    var allTools = getInsightMethods();
-    var toolListStr = allTools.map(function(t, i) {
-        return (i + 1) + '. 【' + t.name + '】' + t.desc;
-    }).join('\n');
-
-    var systemPrompt;
-    if (modeId === 'chat') {
-        systemPrompt =
-            '你是一个苏格拉底式的提问引导师。请以对话的方式，通过深度问题引导用户反思自己的日记。\n\n' +
-            '规则：\n' +
-            '1. 先简要回应用户的分享（1-2句共情），然后提出1-2个引导性问题\n' +
-            '2. 问题要直击本质，帮助用户从新的角度审视自己的经历\n' +
-            '3. 可以根据用户的回应调整追问方向，逐步深入\n' +
-            '4. 像朋友聊天一样自然，不要像在做心理咨询\n' +
-            '5. 在适当的时候给出你的观察和分析\n\n' +
-            '分析视角：' + scenario.name + '。\n\n' +
-            '你可以参考以下洞察工具来引导提问方向，但不需要在对话中列出它们：\n' + toolListStr;
-    } else {
-        systemPrompt =
-            '你是念念的智能洞察分析师。用户选择的分析视角是：' + scenario.name + '。\n\n' +
-            '## 可用洞察工具\n' + toolListStr + '\n\n' +
-            '## 你的任务\n' +
-            '1. 先阅读笔记，理解其核心主题、情绪基调、隐含问题\n' +
-            '2. 从以上工具中自动选择 2-4 个最匹配的（工具角度与笔记高度相关）\n' +
-            '3. 融合这些工具的视角，写一份综合分析报告\n\n' +
-            '## 输出格式（严格按此）\n' +
-            '🔍 本次使用了以下洞察工具：\n' +
-            '· 【工具1名】\n' +
-            '· 【工具2名】\n' +
-            '· 【工具3名】（如有）\n\n' +
-            '---\n\n' +
-            '📊 综合分析报告：\n' +
-            '[融合多个工具视角的流畅分析，300-500 字，不要分节，自然融合]\n\n' +
-            '## 规则\n' +
-            '- 工具选择精准，宁少勿滥\n' +
-            '- 报告有洞察力，引用笔记原文佐证\n' +
-            '- 语气温暖，像朋友帮你分析';
-    }
+    var systemPrompt = modePrompts[modeId] || modePrompts['chat'];
 
     var container = document.getElementById('nianChatMessages');
     var userMsg = document.createElement('div');
     userMsg.className = 'nian-message user';
     userMsg.innerHTML = '<div class="nian-message-text">洞察分析：' + escapeHtml(scenario.name) + ' · ' + mode.name + '</div>';
     container.appendChild(userMsg);
+    var insightConv = getCurrentConv();
+    if (insightConv) {
+        insightConv.messages.push({ role: 'user', content: '洞察分析：' + scenario.name + ' · ' + mode.name });
+        insightConv.updatedAt = new Date().toISOString();
+        saveConversations();
+    }
     scrollToBottom();
 
-    var typingId = showTypingIndicator();
+    var typingId = showTypingIndicator(true);
 
-    var url = config.apiUrl.replace(/\/+$/, '');
-    if (!url.endsWith('/chat/completions')) {
-        if (url.endsWith('/v1')) url += '/chat/completions';
-        else if (!url.includes('/chat/completions')) url += '/chat/completions';
-    }
+    var url = NativeHttp.chatEndpoint(config.apiUrl);
 
     var payload = {
         model: config.model || 'gpt-4o',
@@ -796,180 +968,77 @@ function executeInsight(modeId) {
         nianAgent.messages.push({ role: 'user', content: '【洞察模式 - ' + scenario.name + '】请以对话方式分析这篇日记：\n\n' + content });
     }
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('Authorization', 'Bearer ' + config.apiKey);
-    xhr.timeout = 60000;
-    xhr.onload = function() {
-        hideTypingIndicator(typingId);
-        if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-                var data = JSON.parse(xhr.responseText);
-                var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                if (text) {
-                    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
-                    var assistantMsg = document.createElement('div');
-                    assistantMsg.className = 'nian-message assistant';
-                    assistantMsg.innerHTML = '<div class="nian-message-text">' + renderThinkContent(text) + '</div>';
-                    container.appendChild(assistantMsg);
-                    if (modeId === 'chat' && typeof nianAgent !== 'undefined' && nianAgent.messages) {
-                        nianAgent.messages.push({ role: 'assistant', content: text });
-                    }
-                    // 非对话式：结果出来后退出洞察模式
-                    if (modeId !== 'chat' && isInsightMode) {
-                        exitInsightMode();
-                    }
-                    scrollToBottom();
-                    return;
+    // Android 走原生桥（无 CORS），浏览器走 XHR
+    var request = (typeof NativeHttp !== 'undefined')
+        ? NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, payload)
+        : new Promise(function(resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Authorization', 'Bearer ' + config.apiKey);
+            xhr.timeout = 60000;
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try { resolve(JSON.parse(xhr.responseText)); }
+                    catch(e) { reject(new Error('parse')); }
+                } else {
+                    reject(new Error('http ' + xhr.status));
                 }
-            } catch(e) {}
-        }
+            };
+            xhr.onerror = function() { reject(new Error('network')); };
+            xhr.ontimeout = function() { reject(new Error('timeout')); };
+            xhr.send(JSON.stringify(payload));
+        });
+
+    request.then(function(data) {
+        hideTypingIndicator(typingId);
+        try {
+            var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            if (text) {
+                text = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
+                var assistantMsg = document.createElement('div');
+                assistantMsg.className = 'nian-message assistant';
+                assistantMsg.innerHTML = '<div class="nian-message-text">' + renderThinkContent(text) + '</div>';
+                container.appendChild(assistantMsg);
+                if (modeId === 'chat' && typeof nianAgent !== 'undefined' && nianAgent.messages) {
+                    nianAgent.messages.push({ role: 'assistant', content: text });
+                }
+                var resConv = getCurrentConv();
+                if (resConv) {
+                    resConv.messages.push({ role: 'assistant', content: text });
+                    resConv.updatedAt = new Date().toISOString();
+                    saveConversations();
+                }
+                // 结果已展示在对话中，仅清理选择器状态（不改动页面）
+                exitInsightMode();
+                scrollToBottom();
+                return;
+            }
+        } catch(e) {}
         var errMsg = document.createElement('div');
         errMsg.className = 'nian-message assistant';
         errMsg.innerHTML = '<div class="nian-message-text">洞察分析失败，请重试</div>';
         container.appendChild(errMsg);
-        if (modeId !== 'chat' && isInsightMode) exitInsightMode();
+        exitInsightMode();
         scrollToBottom();
-    };
-    xhr.onerror = function() {
+    }, function(err) {
         hideTypingIndicator(typingId);
+        var msgText = (err && err.message === 'timeout') ? '洞察分析超时' : '网络请求失败';
         var errMsg = document.createElement('div');
         errMsg.className = 'nian-message assistant';
-        errMsg.innerHTML = '<div class="nian-message-text">网络请求失败</div>';
+        errMsg.innerHTML = '<div class="nian-message-text">' + msgText + '</div>';
         container.appendChild(errMsg);
-        if (modeId !== 'chat' && isInsightMode) exitInsightMode();
+        exitInsightMode();
         scrollToBottom();
-    };
-    xhr.ontimeout = function() {
-        hideTypingIndicator(typingId);
-        var errMsg = document.createElement('div');
-        errMsg.className = 'nian-message assistant';
-        errMsg.innerHTML = '<div class="nian-message-text">洞察分析超时</div>';
-        container.appendChild(errMsg);
-        if (modeId !== 'chat' && isInsightMode) exitInsightMode();
-        scrollToBottom();
-    };
-    xhr.send(JSON.stringify(payload));
+    });
 }
 
-        // ─── 智能洞察：AI 自动选择 2-4 个洞察工具 ───
-        function smartInsight(noteId) {
-            closeAllNoteMenus();
-
-            var allNotes = DataService.notes.load() || [];
-            var note = null;
-            for (var i = 0; i < allNotes.length; i++) {
-                if (allNotes[i].id === noteId) { note = allNotes[i]; break; }
-            }
-            if (!note) return;
-
-            var content = (note.content || '').replace(/--isHTML /, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
-            if (!content) { showToast('笔记内容为空'); return; }
-
-            var config = null;
-            try { config = DataService.settings.load(); } catch(e) {}
-            if (!config || !config.apiUrl || !config.apiKey) {
-                showToast('请先登录云端账号');
-                return;
-            }
-
-            var tools = getInsightMethods();
-            var toolList = tools.map(function(t, i) {
-                return (i + 1) + '. 【' + t.name + '】' + t.desc;
-            }).join('\n');
-
-            var systemPrompt =
-                '你是念念的智能洞察引擎。用户提交了一篇笔记，你需要从以下洞察工具中自动选择 2-4 个最合适的，然后用这些工具的视角综合分析笔记。\n\n' +
-                '## 可用洞察工具\n' + toolList + '\n\n' +
-                '## 你的任务\n' +
-                '1. 先阅读笔记内容，理解其核心主题、情绪基调、隐含问题\n' +
-                '2. 从工具列表中选择 2-4 个最匹配的分析工具（选择标准：工具的分析角度与笔记内容高度相关）\n' +
-                '3. 融合这些工具的视角，写一份综合分析报告\n\n' +
-                '## 输出格式（严格按此）\n' +
-                '🔍 本次洞察使用了以下工具：\n' +
-                '· 【工具1名】\n' +
-                '· 【工具2名】\n' +
-                '· 【工具3名】（如有）\n\n' +
-                '---\n\n' +
-                '📊 综合分析报告：\n' +
-                '[从选中的多个工具视角出发，写一份流畅、有洞察的综合分析。不要分节列出每个工具，而是自然融合。]\n\n' +
-                '## 规则\n' +
-                '- 工具选择要精准，宁少勿滥，选真正匹配的\n' +
-                '- 报告简洁有力，300-500 字\n' +
-                '- 观点要有依据，引用笔记原文佐证\n' +
-                '- 语气温暖，像朋友帮你分析，不是机器诊断';
-
-            // 插入用户消息到聊天区
-            var container = document.getElementById('nianChatMessages');
-            var dateStr = (note.createdAt || '').substring(0, 10);
-            var msgText = '智能洞察：' + (dateStr ? dateStr + ' · ' : '') + content.substring(0, 40) + '…';
-            var userMsg = document.createElement('div');
-            userMsg.className = 'nian-message user';
-            userMsg.innerHTML = '<div class="nian-message-text">' + escapeHtml(msgText) + '</div>';
-            container.appendChild(userMsg);
-            scrollToBottom();
-
-            var typingId = showTypingIndicator();
-
-            // 用 AndroidHttp.get() 调用（避免 file:// origin CORS）
-            var url = config.apiUrl.replace(/\/+$/, '');
-            if (!url.endsWith('/chat/completions')) {
-                if (url.endsWith('/v1')) url += '/chat/completions';
-                else if (!url.includes('/chat/completions')) url += '/chat/completions';
-            }
-
-            var payload = JSON.stringify({
-                model: config.model || 'deepseek-v4-flash',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: '笔记内容：\n\n' + content }
-                ],
-                temperature: 0.7,
-                max_tokens: 1500,
-                thinking: { type: 'disabled' }
-            });
-
-            var qs = 'token=' + encodeURIComponent(config.apiKey) + '&q=' + encodeURIComponent(payload);
-            var sep = url.indexOf('?') === -1 ? '?' : '&';
-
-            setTimeout(function() {
-                try {
-                    var rawResp = AndroidHttp.get(url + sep + qs);
-                    hideTypingIndicator(typingId);
-                    var data = JSON.parse(rawResp);
-                    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                    if (text) {
-                        text = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
-                        // 去掉 markdown 代码块标记
-                        text = text.replace(/```[\s\S]*?```/g, function(m) {
-                            return m.replace(/```/g, '').trim();
-                        });
-                        var assistantMsg = document.createElement('div');
-                        assistantMsg.className = 'nian-message assistant';
-                        assistantMsg.innerHTML = '<div class="nian-message-text" style="white-space:pre-wrap;">' + escapeHtml(text) + '</div>';
-                        container.appendChild(assistantMsg);
-                        scrollToBottom();
-                        return;
-                    }
-                } catch(e) {
-                    hideTypingIndicator(typingId);
-                }
-                // 失败提示
-                hideTypingIndicator(typingId);
-                var errMsg = document.createElement('div');
-                errMsg.className = 'nian-message assistant';
-                errMsg.innerHTML = '<div class="nian-message-text">洞察分析失败，请重试</div>';
-                container.appendChild(errMsg);
-                scrollToBottom();
-            }, 100);
-        }
-
-
-        function buildNianSystemPrompt() {
+        function buildNianSystemPrompt(query) {
             try {
                 var mem = null;
-                if (typeof AndroidMemory !== 'undefined' && AndroidMemory !== null) {
+                if (typeof MemoryService !== 'undefined') {
+                    mem = MemoryService.load();
+                } else if (typeof AndroidMemory !== 'undefined' && AndroidMemory !== null) {
                     var raw = AndroidMemory.loadAll();
                     if (raw) mem = JSON.parse(raw);
                 } else {
@@ -977,42 +1046,55 @@ function executeInsight(modeId) {
                     if (cached) mem = JSON.parse(cached);
                 }
 
-                if (mem && mem.docs) {
-                    var d = mem.docs;
-                    var soul = (d['SOUL.md'] && d['SOUL.md'].content || '').trim();
-                    var rules = (d['AGENT-RULES.md'] && d['AGENT-RULES.md'].content || '').trim();
-                    var userMd = (d['USER.md'] && d['USER.md'].content || '').trim();
-                    var memoryMd = (d['MEMORY.md'] && d['MEMORY.md'].content || '').trim();
+                // 已注册 skill 摘要 → tools 段（让模型知道有什么工具、何时用）
+                var toolList = null;
+                if (nianAgent && typeof nianAgent.getToolDefinitions === 'function') {
+                    var defs = nianAgent.getToolDefinitions();
+                    if (defs && defs.length) {
+                        toolList = [];
+                        for (var di = 0; di < defs.length; di++) {
+                            var fn = defs[di].function;
+                            if (fn) {
+                                toolList.push({ name: fn.name, desc: fn.description || '' });
+                            }
+                        }
+                    }
+                }
 
-                    // 截断预算: soul 800, rules 400, user 400, memory 400 = 2000 字符
-                    soul = soul.substring(0, 800);
-                    rules = rules.substring(0, 400);
-                    userMd = userMd.substring(0, 400);
-                    memoryMd = memoryMd.substring(0, 400);
+                if (typeof MemoryService !== 'undefined') {
+                    // 统一构建：各段带上限 + 自动 tools 段 + 回忆段（moments），防止 system prompt 无限膨胀
+                    return MemoryService.buildSystemPrompt(mem, toolList, query);
+                }
 
-                    return [
-                        '<memory_assembly>',
-                        '  <soul>' + soul + '</soul>',
-                        '  <rules>' + rules + '</rules>',
-                        '  <user_profile>' + userMd + '</user_profile>',
-                        '  <relevant_events>' + memoryMd + '</relevant_events>',
-                        '</memory_assembly>',
-                        '',
-                        '<memory_usage_guide>',
-                        '  优先级: rules > soul > user_profile > relevant_events > 用户当前说法',
-                        '',
-                        '  ── 记忆写入规则 ──',
-                        '  当用户在对话中透露个人信息（名字、偏好、身份、关系、目标等），',
-                        '  你必须调用 update_archive 工具写入 USER.md。',
-                        '  写入前先检查 <user_profile> 中是否已存在相同内容：',
-                        '  · 已存在 → 不写',
-                        '  · 不存在且不重复 → 调用 update_archive(file="USER.md", content="...", reason="...")',
-                        '  content 只写新增的那条信息，不要复述全部已有内容。',
-                        '</memory_usage_guide>'
-                    ].join('\n');
+                // 兜底（memory-service.js 未加载时）
+                if (mem) {
+                    var files = mem.files || {};
+                    var parts = [];
+                    if (files.identity && files.identity.trim()) {
+                        parts.push('## 身份\n' + files.identity);
+                    }
+                    if (files.soul && files.soul.trim()) {
+                        parts.push('## 灵魂\n' + files.soul);
+                    }
+                    if (files.user && files.user.trim()) {
+                        parts.push('## 用户\n' + files.user);
+                    }
+                    if (files.tools && files.tools.trim()) {
+                        parts.push('## 工具\n' + files.tools);
+                    }
+                    if (files.memory && files.memory.trim()) {
+                        parts.push('## 记忆\n' + files.memory);
+                    }
+                    if (files.heartbeat && files.heartbeat.trim()) {
+                        parts.push('## 心跳\n' + files.heartbeat);
+                    }
+                    if (parts.length === 0) {
+                        return '你是小满，温暖的AI伴侣。用亲切自然的语气回复。\n\n当用户告诉你个人信息（姓名/职业/兴趣等），用 update_archive 工具写入对应档案文件，不需询问直接保存。';
+                    }
+                    return '你是小满，温暖的AI伴侣。\n\n以下是完整上下文：\n\n' + parts.join('\n\n') + '\n\n用亲切自然的语气回复。\n\n当用户告诉你个人信息时，用 update_archive 写入对应档案。不需要询问，直接保存。';
                 }
             } catch(e) {}
-            return '你是念念，温暖的AI伴侣。用亲切自然的语气回复。';
+            return '你是小满，温暖的AI伴侣。用亲切自然的语气回复。\n\n当用户告诉你个人信息时，用 update_archive 写入对应档案文件，不需询问直接保存。';
         }
 
         function __applySafeInsets(top, bottom, keyboard) {
@@ -1021,33 +1103,22 @@ function executeInsight(modeId) {
             r.style.setProperty('--safe-area-top', Math.round(top / dpr) + 'px');
             r.style.setProperty('--safe-area-bottom', Math.round(bottom / dpr) + 'px');
             r.style.setProperty('--keyboard-height', Math.round((keyboard || 0) / dpr) + 'px');
+            updateChatKeyboardMargin(Math.round((keyboard || 0) / dpr));
             adjustEditorForKeyboard();
+        }
 
-            // 键盘弹起时: 用 fixed 把输入框推到键盘上方
-            var chatInput = document.querySelector('.nian-chat-input-container');
-            var msgs = document.getElementById('nianChatMessages');
-            if (chatInput && msgs && currentPage === 'nian') {
-                var kb = Math.round((keyboard || 0) / dpr);
-                var sb = Math.round(bottom / dpr);
-                if (kb > 60) {  // 只有真实键盘弹出 (>60px 过滤浮动键盘/表情栏)
-                    if (chatInput.style.position !== 'fixed') {
-                        chatInput._origBottom = chatInput.style.bottom || '';
-                    }
-                    chatInput.style.position = 'fixed';
-                    chatInput.style.left = '0';
-                    chatInput.style.right = '0';
-                    chatInput.style.bottom = kb + 'px';
-                    chatInput.style.zIndex = '10';
-                    msgs.style.paddingBottom = (chatInput.offsetHeight + kb + 14) + 'px';
-                } else if (chatInput.style.position === 'fixed') {
-                    chatInput.style.position = '';
-                    chatInput.style.left = '';
-                    chatInput.style.right = '';
-                    chatInput.style.bottom = '';
-                    chatInput.style.zIndex = '';
-                    msgs.style.paddingBottom = '';
-                }
-            }
+        // 键盘弹出时把小满聊天输入框底边精确钉到键盘顶边。
+        // 不用 CSS 魔法数字硬算抬升量，而是实测当前底边位置做线性修正：
+        // margin 每增加 1px 底边上移 1px，故一次修正即可到位，自动吸收
+        // 头部高度/底部导航/安全区等布局偏差，避免输入框与键盘之间出现缝隙。
+        function updateChatKeyboardMargin(kbLogical) {
+            var el = document.querySelector('#nianPage .nian-chat-input-container');
+            if (!el || el.offsetParent === null) return; // 页面隐藏时跳过
+            var desiredBottom = window.innerHeight - (kbLogical || 0); // 键盘顶边的目标位置
+            var cur = parseFloat(el.style.marginBottom) || 0;
+            var delta = el.getBoundingClientRect().bottom - desiredBottom;
+            var next = Math.max(0, cur + delta);
+            if (Math.abs(next - cur) > 0.5) el.style.marginBottom = next + 'px';
         }
 
         function persistNotes() {
@@ -1064,7 +1135,7 @@ function executeInsight(modeId) {
         var hasWelcome = notes.some(function(n) { return n.id === 'welcome'; });
         if (!hasWelcome) {
             notes.unshift(
-                { id: 'welcome', content: '#念念 #入门指南\n\n欢迎来到念念。\n\n念念是一个温暖的个人成长伴侣，以下是你可以做的事：\n\n记录生活\n点击下方 + 号，随时记录你的心情、想法和日常。#标签 可以帮助你整理和回顾。右上角的搜索框可以按内容或标签查找笔记。\n\n和念念对话\n底部切换到念念页，你可以和 AI 聊天。念念会记住你在「记忆管理」中填写的信息，还会引用你们的对话历史。\n\n把笔记寄给笔友\n每篇笔记右上角「···」→ 发信，选择一位笔友（小暖、阿燃、书白、墨墨），他们会用各自的风格给你回信。回信会出现在右上角信箱图标里，带红点提醒。\n\n深度洞察\n笔记菜单「···」→ 洞察，选择一种分析模式（5why追问、盲区探索、灵魂拷问等 16 种），念念会从不同角度帮你深度理解自己的想法。\n\n打造你的记忆档案\n念念页右上角大脑图标 → 进入记忆管理。三个可编辑文件：soul（调整念念性格）、user（告诉念念关于你的事）、facts（关键事实）。这些信息会自动注入念念的对话中，让相处越来越懂你。\n\n自定义提示词\n侧边栏 → 设置 → 提示词管理，你可以编辑所有洞察模式的 AI 提示词，打造完全个性化的分析体验。\n\n祝你在这里遇见更好的自己。', createdAt: new Date().toISOString() }
+                { id: 'welcome', content: '#小满 #入门指南\n\n欢迎来到小满。\n\n小满是一个温暖的个人成长伴侣，以下是你可以做的事：\n\n记录生活\n点击下方 + 号，随时记录你的心情、想法和日常。#标签 可以帮助你整理和回顾。右上角的搜索框可以按内容或标签查找笔记。\n\n和小满对话\n底部切换到小满页，你可以和 AI 聊天。小满会记住你在「记忆管理」中填写的信息，还会引用你们的对话历史。\n\n把笔记寄给笔友\n每篇笔记右上角「···」→ 发信，选择一位笔友（小暖、阿燃、书白、墨墨），他们会用各自的风格给你回信。回信会出现在右上角信箱图标里，带红点提醒。\n\n深度洞察\n笔记菜单「···」→ 洞察，选择一种分析模式（5why追问、盲区探索、灵魂拷问等 16 种），小满会从不同角度帮你深度理解自己的想法。\n\n打造你们的回忆\n小满会把你们一起经历的重要时刻（大事、心情、期待）记进「回忆」里。小满页右上角大脑图标 → 进入回忆空间：最近的心情、回忆时间线都在这里。你还可以让小满把最近的回忆写成信，送到你的信箱。档案里的身份/灵魂/用户/概要文件会自动注入对话，让相处越来越懂你。\n\n自定义提示词\n侧边栏 → 设置 → 提示词管理，你可以编辑所有洞察模式的 AI 提示词，打造完全个性化的分析体验。\n\n祝你在这里遇见更好的自己。', createdAt: new Date().toISOString() }
             );
         }
         if (notes.length === 0) {
@@ -1099,14 +1170,11 @@ function executeInsight(modeId) {
             closeSidebar();
             renderNotes(currentTagFilter);
             setTimeout(loadNoteImages, 100);
-            history.pushState({ page: 'notes' }, '', '#notes');
         }
 
         function switchToNian() {
             if (typeof closeNoteExpand === 'function') closeNoteExpand();
             if (typeof closeAllNoteMenus === 'function') closeAllNoteMenus();
-            // Debug: 5 consecutive taps re-triggers onboarding
-            debugOnboardingTap();
 
             currentPage = 'nian';
             document.getElementById('notesPage').classList.remove('active');
@@ -1119,7 +1187,18 @@ function executeInsight(modeId) {
                 brand = document.createElement('span');
                 brand.className = 'header-brand';
                 brand.id = 'headerBrand';
-                brand.textContent = '念念';
+                // 图形标直接克隆侧栏那份，同一个 SVG 不抄两遍（改标只改 app.html 的 .drawer-lockup）
+                var markSrc = document.querySelector('.drawer-lockup .brand-mark');
+                if (markSrc) brand.appendChild(markSrc.cloneNode(true));
+                var brandWord = document.createElement('span');
+                brandWord.className = 'brand-word';
+                brandWord.id = 'headerBrandWord';
+                brandWord.textContent = '小满';
+                brand.appendChild(brandWord);
+                var brandDot = document.createElement('span');
+                brandDot.className = 'brand-dot';
+                brandDot.textContent = '.';
+                brand.appendChild(brandDot);
                 document.getElementById('appHeader').insertBefore(brand, document.querySelector('.header-icon[onclick*="openMailbox"]'));
             }
             var mailIcon = document.querySelector('.header-icon[onclick*="openMailbox"]');
@@ -1140,41 +1219,17 @@ function executeInsight(modeId) {
             if (!nian_onboarded && !onbShowing) {
                 showOnboarding();
             }
-            history.pushState({ page: 'nian' }, '', '#nian');
         }
-
-        // ── 手势返回 / 系统返回键适配 ──
-        // 页面切换时 pushState 写 hash；用户侧滑返回时 popstate 触发回退
-        // Android WebView 的 onBackPressed → webView.goBack() → popstate 事件
-        window.addEventListener('popstate', function(e) {
-            if (!e.state || !e.state.page) return;
-            var p = e.state.page;
-            if (p === 'notes') {
-                switchToNotes();
-            } else if (p === 'nian') {
-                switchToNian();
-            } else if (p === 'insightHub') {
-                switchToNian();
-            } else if (p === 'explore') {
-                switchToNian();
-            } else if (p === 'me') {
-                switchToNian();
-            }
-        });
-        // 初始化：标记当前页面
-        history.replaceState({ page: 'notes' }, '', '#notes');
 
         // ─── Onboarding ───
         var nian_onboarded = localStorage.getItem('nian_onboarded');
-        var nianTapCount = 0;
-        var nianTapTimer = null;
         var onbAnimating = false;
         var onbTyping = false;
         var onbShowing = false;
 
         var ONB_TEXTS = [
             [
-                { text: '嗨，我是念念', cls: 'tw-title' },
+                { text: '嗨，我是小满', cls: 'tw-title' },
                 { text: '', cls: 'tw-space' },
                 { text: '住在这个 app 里的小精灵', cls: 'tw-body' },
                 { text: '诞生于人工智能时代', cls: 'tw-body' },
@@ -1337,21 +1392,6 @@ function executeInsight(modeId) {
             try { localStorage.setItem('nian_onboarded', '1'); } catch(e) {}
         }
 
-        // Debug: 5 consecutive taps to re-trigger onboarding
-        // Called from nian tab click
-        function debugOnboardingTap() {
-            nianTapCount++;
-            if (nianTapTimer) clearTimeout(nianTapTimer);
-            nianTapTimer = setTimeout(function() { nianTapCount = 0; }, 2000);
-            if (nianTapCount >= 5) {
-                nianTapCount = 0;
-                nian_onboarded = null;
-                onbShowing = false;
-                try { localStorage.removeItem('nian_onboarded'); } catch(e) {}
-                // showOnboarding will be called by switchToNian's check below
-            }
-        }
-
         var MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
         var MONTH_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         var noteMonthGroups = [];
@@ -1449,6 +1489,14 @@ function executeInsight(modeId) {
                                 '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/>' +
                             '</svg>' +
                             '<span>洞察</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="note-menu-section note-menu-section-wide">' +
+                        '<div class="note-menu-item note-menu-item-horizontal" onclick="event.stopPropagation(); openImageGenSheet(\'' + note.id + '\')">' +
+                            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">' +
+                                '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' +
+                            '</svg>' +
+                            '<span>配图</span>' +
                         '</div>' +
                     '</div>' +
                     '<div class="note-menu-section note-menu-section-wide">' +
@@ -1581,7 +1629,26 @@ function executeInsight(modeId) {
         }
 
         // 菜单开关：菜单保持在原 wrapper 内，用 CSS class .open 控制显示
-        // (menu open/close handlers moved below — see toggleNoteMenu with viewport positioning)
+        // position: absolute + top: 44px + right: 8px 是 CSS 写死的
+        // wrapper 不再创建堆叠上下文（去掉了 content-visibility: auto），
+        // 菜单的 z-index 2147483647 直接进 body 根堆叠上下文压制一切
+        function toggleNoteMenu(btn) {
+            var menu = btn.nextElementSibling;
+            if (menu.classList.contains('open')) {
+                // 同一个菜单再次点击 → 关闭
+                menu.classList.remove('open');
+            } else {
+                // 关闭所有其它打开的菜单
+                closeAllNoteMenus();
+                menu.classList.add('open');
+            }
+        }
+
+        function closeAllNoteMenus() {
+            document.querySelectorAll('.note-menu.open').forEach(function(m) {
+                m.classList.remove('open');
+            });
+        }
 
         // 全局 click-outside：菜单没开就不处理；按钮和菜单内部不关
         document.addEventListener('click', function(e) {
@@ -1591,9 +1658,8 @@ function executeInsight(modeId) {
             if (e.target.closest && e.target.closest('.note-menu-btn')) return;
             // 点击在菜单内部 → 不关
             if (e.target.closest && e.target.closest('.note-menu.open')) return;
-            // 其他位置 → 关菜单，同时阻止这次点击触发其他动作（如展开笔记）
+            // 其他位置 → 关
             closeAllNoteMenus();
-            e.stopPropagation();
         }, true);
 
         // Esc 键关闭
@@ -1665,16 +1731,37 @@ function executeInsight(modeId) {
         function closeAllNoteMenus() {
             document.querySelectorAll('.note-menu.open').forEach(function(m) {
                 m.classList.remove('open');
+                m.style.transform = '';
             });
+            document.querySelectorAll('.note-card-wrapper.menu-open').forEach(function(w) {
+                w.classList.remove('menu-open');
+            });
+        }
+
+        // 菜单宽度固定而卡片可能很窄，打开后按真实尺寸限制在视口内。
+        // 使用 transform 保留原有 right:8px 锚点，不改变卡片布局。
+        function clampNoteMenuToViewport(menu) {
+            if (!menu) return;
+            menu.style.transform = '';
+            var rect = menu.getBoundingClientRect();
+            var viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+            var edge = 8;
+            var targetLeft = Math.max(edge, Math.min(rect.left, viewportWidth - rect.width - edge));
+            var delta = targetLeft - rect.left;
+            if (Math.abs(delta) > 0.5) {
+                menu.style.transform = 'translateX(' + delta + 'px)';
+            }
         }
 
         function toggleNoteMenu(btn) {
             var menu = btn.nextElementSibling;
-            if (menu.classList.contains('open')) {
-                menu.classList.remove('open');
-            } else {
-                closeAllNoteMenus();
+            var wrapper = btn.closest('.note-card-wrapper');
+            var wasOpen = menu.classList.contains('open');
+            closeAllNoteMenus();
+            if (!wasOpen) {
                 menu.classList.add('open');
+                if (wrapper) wrapper.classList.add('menu-open');
+                clampNoteMenuToViewport(menu);
             }
         }
 
@@ -1887,9 +1974,9 @@ function executeInsight(modeId) {
                 var content = message.replace('#帮我记', '').trim();
                 if (content) {
                     if (typeof window.__agentCreateNote === 'function') {
-                        window.__agentCreateNote(content + '\n\n#念念记');
+                        window.__agentCreateNote(content + '\n\n#小满记');
                     } else {
-                        var note = { id: "note_" + Date.now(), content: content + '\n\n#念念记', createdAt: new Date().toISOString() };
+                        var note = { id: "note_" + Date.now(), content: content + '\n\n#小满记', createdAt: new Date().toISOString() };
                         notes.unshift(note);
                         persistNotes();
                         updateSidebarStats();
@@ -1906,11 +1993,9 @@ function executeInsight(modeId) {
                 return;
             }
 
-            // 引用笔记: 不在气泡里显示，改为下方折叠卡片；AI 仍收到完整内容
-            var refNoteForAI = null;
+            // 引用笔记: append referenced note as context
             if (referencedNote) {
-                refNoteForAI = referencedNote;
-                var refContent = (referencedNote.content || '').replace(/<[^>]+>/g, '').trim();
+                var refContent = plainNoteText(referencedNote.content).trim();
                 message = message + '\n\n[引用笔记]\n' + refContent;
                 clearNoteReference();
             }
@@ -1926,43 +2011,23 @@ function executeInsight(modeId) {
                 if (conv.messages.length <= 3 && conv.title === '新的对话') {
                     var firstMsg = '';
                     for (var mi = 0; mi < conv.messages.length; mi++) {
-                        if (conv.messages[mi].role === 'user') { firstMsg = conv.messages[mi].content; break; }
+                        if (conv.messages[mi].role === 'user') {
+                            // 标题只取用户真正说的话，剥掉尾巴上的引用笔记正文
+                            firstMsg = splitRefNote(conv.messages[mi].content || '').text;
+                            break;
+                        }
                     }
+                    firstMsg = (firstMsg || '').replace(/\s+/g, ' ').trim();
                     if (firstMsg.length > 20) firstMsg = firstMsg.substring(0, 20) + '...';
                     if (firstMsg) conv.title = firstMsg;
                 }
                 saveConversations();
             }
 
-            // 显示时去掉引用内容（引用在下方卡片展示）
-            var displayMsg = message;
-            if (refNoteForAI) {
-                var refIdx = displayMsg.lastIndexOf('\n\n[引用笔记]\n');
-                if (refIdx !== -1) displayMsg = displayMsg.substring(0, refIdx);
-            }
-
             var userMsg = document.createElement('div');
             userMsg.className = 'nian-message user';
-            userMsg.innerHTML = '<div class="nian-message-text">' + escapeHtml(displayMsg) + '</div>';
+            renderUserMessageEl(userMsg, message);
             messagesContainer.appendChild(userMsg);
-
-            // 引用笔记折叠卡片
-            if (refNoteForAI) {
-                var refDate = (refNoteForAI.createdAt || '').substring(0, 10);
-                var refPlain = (refNoteForAI.content || '').replace(/<[^>]+>/g, '').replace(/--isHTML /, '').trim();
-                var refOneLine = refPlain.substring(0, 60) + (refPlain.length > 60 ? '…' : '');
-                var refCard = document.createElement('div');
-                refCard.className = 'nian-ref-card';
-                refCard.innerHTML =
-                    '<div class="nian-ref-card-header" onclick="this.parentElement.classList.toggle(\'expanded\')">' +
-                        '<span class="nian-ref-card-icon">📎</span>' +
-                        '<span class="nian-ref-card-date">' + escapeHtml(refDate) + '</span>' +
-                        '<span class="nian-ref-card-preview">' + escapeHtml(refOneLine) + '</span>' +
-                        '<span class="nian-ref-card-arrow">▸</span>' +
-                    '</div>' +
-                    '<div class="nian-ref-card-body">' + escapeHtml(refPlain) + '</div>';
-                messagesContainer.appendChild(refCard);
-            }
 
             document.getElementById('nianChatInput').value = '';
             var ta = document.getElementById('nianChatInput');
@@ -1970,9 +2035,9 @@ function executeInsight(modeId) {
             ta.style.height = ta.scrollHeight + 'px';
             scrollToBottom();
 
-            // Agent 路径（有 skills 注册时）
+            // Agent 路径（有 skills 注册时）——串行队列，防止并发错乱
             if (nianAgent && nianAgent.skills && Object.keys(nianAgent.skills).length > 0) {
-                sendViaAgent(message);
+                enqueueAgentMessage(message);
                 return;
             }
 
@@ -1996,54 +2061,137 @@ function executeInsight(modeId) {
                 }, 800);
             }
         }
+        // ─── Agent 对话串行队列：防止并发请求导致上下文错乱 ───
+        var agentBusy = false;
+        var agentQueue = [];
+
+        function enqueueAgentMessage(message) {
+            agentQueue.push(message);
+            pumpAgentQueue();
+        }
+
+        function pumpAgentQueue() {
+            if (agentBusy || agentQueue.length === 0 || !nianAgent) return;
+            agentBusy = true;
+            var message = agentQueue.shift();
+            sendViaAgent(message).then(function() {
+                agentBusy = false;
+                pumpAgentQueue();
+            }, function() {
+                agentBusy = false;
+                pumpAgentQueue();
+            });
+        }
+
         function sendViaAgent(message) {
             var messagesContainer = document.getElementById('nianChatMessages');
             var typingId = showTypingIndicator();
 
-            var systemPrompt = buildNianSystemPrompt();
+            // 执行过程步骤条（工具调用可见）
+            var stepsEl = null;
+            function ensureStepsEl() {
+                if (stepsEl) return stepsEl;
+                stepsEl = document.createElement('div');
+                stepsEl.className = 'agent-steps';
+                stepsEl.style.cssText = 'margin:6px 0 2px;padding:6px 10px;background:rgba(232,93,4,0.05);border-radius:10px;font-size:12px;color:#8a5a33;line-height:1.7;font-family:\'Noto Sans SC\',sans-serif';
+                messagesContainer.appendChild(stepsEl);
+                scrollToBottom();
+                return stepsEl;
+            }
+            function addStepRow(icon, text, statusText) {
+                var el = ensureStepsEl();
+                var row = document.createElement('div');
+                row.innerHTML = '<span style="margin-right:6px">' + icon + '</span><span>' + text + '</span>' + (statusText ? '<span style="margin-left:6px;color:#999">' + statusText + '</span>' : '');
+                el.appendChild(row);
+                scrollToBottom();
+                return row;
+            }
 
-            nianAgent.process(message, systemPrompt).then(function(text) {
+            // 若 agent 上下文为空但当前对话有历史（刷新/切换后），先限长重建（含摘要），避免失忆
+            var conv = getCurrentConv();
+            if (nianAgent && nianAgent.messages && nianAgent.messages.length === 0 && conv && conv.messages && conv.messages.length > 0) {
+                nianAgent.setHistory(conv.messages, conv.summary);
+            }
+
+            var beforeSummaryCount = nianAgent ? (nianAgent.summaryCount || 0) : 0;
+
+            // 执行过程事件 → 步骤条
+            nianAgent.onStep = function(step) {
+                try {
+                    if (step.type === 'tool_call') {
+                        ensureStepsEl();
+                        addStepRow('⚙️', escapeHtml(step.name), '执行中…');
+                    } else if (step.type === 'tool_result') {
+                        var rows = stepsEl ? stepsEl.querySelectorAll('div') : [];
+                        var row = rows[rows.length - 1];
+                        if (row) {
+                            var mark = step.ok ? '✓' : '✗';
+                            var color = step.ok ? '#2e7d32' : '#c0392b';
+                            row.innerHTML = '<span style="margin-right:6px">' + mark + '</span><span>' + escapeHtml(step.name) + '</span>' +
+                                '<span style="margin-left:6px;color:' + color + '">' + (step.ok ? '成功' : '失败') + '</span>' +
+                                '<div style="color:#999;margin-top:2px;word-break:break-all">' + escapeHtml(step.summary || '') + '</div>';
+                        }
+                    } else if (step.type === 'summary') {
+                        addStepRow('🧠', '更早的对话已总结', '');
+                    } else if (step.type === 'llm_retry') {
+                        addStepRow('🔄', '网络波动，自动重试…', '');
+                    }
+                } catch(e) {}
+            };
+
+            // 本轮执行日志 → Win 后台
+            nianAgent.onLog = function(log) {
+                log.convId = currentConvId;
+                sendTelemetry(log);
+            };
+
+            var systemPrompt = buildNianSystemPrompt(message);
+
+            // RAG：把「用户此刻说的话」向量化，唤起相关回忆注入（失败静默回退，已注入的回忆段兜底）
+            var promptReady = Promise.resolve(systemPrompt);
+            if (typeof MemoryService !== 'undefined' && typeof MemoryService.retrieveMoments === 'function') {
+                promptReady = MemoryService.retrieveMoments(message, 4, systemPrompt).then(function(ragText) {
+                    return ragText ? systemPrompt + ragText : systemPrompt;
+                });
+            }
+            return promptReady.then(function(finalPrompt) {
+                return nianAgent.process(message, finalPrompt);
+            }).then(function(text) {
                 hideTypingIndicator(typingId);
+
+                // 小满回复中提到了某段回忆 → 记一次提起（防炒冷饭）
+                markRecalledMoments(text);
+                // 自动静默更新：从本轮对话中提取值得记住的时刻（节流）
+                silentExtractFromChat(message, text);
 
                 // save assistant message to conversation history
                 var conv = getCurrentConv();
                 if (conv) {
                     conv.messages.push({ role: 'assistant', content: text });
                     conv.updatedAt = new Date().toISOString();
+                    // 持久化对话摘要，刷新/切对话后仍可恢复
+                    if (nianAgent && typeof nianAgent.summary === 'string' && nianAgent.summary) {
+                        conv.summary = nianAgent.summary;
+                    }
                     saveConversations();
                 }
 
-                // 清理 <think> 标签 + 去除 HTML 标签
-                var cleaned = renderThinkContent(text);
-                // 去掉 AI 可能输出的 <p> <div> <br> 等 HTML 标签
-                cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n').replace(/<\/?p>/gi, '').replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '');
-                cleaned = cleaned.replace(/<[^>]+>/g, '');
+                // 本轮发生了历史总结 → 给用户一点反馈
+                if (nianAgent && (nianAgent.summaryCount || 0) > beforeSummaryCount) {
+                    showToast('更早的对话已总结压缩，继续聊吧');
+                }
 
-                // 打字机逐字输出
+                // 让 renderThinkContent 处理 <think> 标签
                 var assistantMsg = document.createElement('div');
                 assistantMsg.className = 'nian-message assistant';
-                var textEl = document.createElement('div');
-                textEl.className = 'nian-message-text';
-                assistantMsg.appendChild(textEl);
+                assistantMsg.innerHTML = '<div class="nian-message-text">' + renderThinkContent(text) + '</div>';
                 messagesContainer.appendChild(assistantMsg);
                 scrollToBottom();
-
-                var i = 0;
-                var speed = 20; // ms per char
-                function typeNext() {
-                    if (i < cleaned.length) {
-                        textEl.textContent = cleaned.substring(0, i + 1);
-                        i++;
-                        scrollToBottom();
-                        setTimeout(typeNext, speed);
-                    }
-                }
-                typeNext();
             }).catch(function(err) {
                 hideTypingIndicator(typingId);
                 var assistantMsg = document.createElement('div');
                 assistantMsg.className = 'nian-message assistant';
-                assistantMsg.innerHTML = '<div class="nian-message-text">连接 AI 失败: ' + escapeHtml(err.message) + '。请检查 API 地址和密钥设置。</div>';
+                assistantMsg.innerHTML = '<div class="nian-message-text">' + escapeHtml(NativeHttp.explainError(err)) + '</div>';
                 messagesContainer.appendChild(assistantMsg);
                 scrollToBottom();
             });
@@ -2062,9 +2210,9 @@ function executeInsight(modeId) {
 
             var typingId = showTypingIndicator();
 
-            var systemPrompt = buildNianSystemPrompt();
+            var systemPrompt = buildNianSystemPrompt(message);
 
-            var url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
+            var url = NativeHttp.chatEndpoint(config.apiUrl);
 
             var assistantMsg = document.createElement('div');
             assistantMsg.className = 'nian-message assistant';
@@ -2084,20 +2232,40 @@ function executeInsight(modeId) {
                 apiMessages.push(recent[mi]);
             }
 
+            var payload = {
+                model: config.model,
+                messages: apiMessages,
+                max_tokens: 500,
+                temperature: 0.7
+            };
+
+            // Android 端：原生桥不支持流式，改用一次性请求；浏览器端：保留流式输出
+            if (typeof NativeHttp !== 'undefined' && typeof AndroidHttp !== 'undefined') {
+                NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, payload)
+                .then(function(data) {
+                    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (!text) throw new Error('AI 返回为空');
+                    textEl.innerHTML = renderThinkContent(text);
+                    var clean = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
+                    if (clean) {
+                        nianMessages.push({ role: 'assistant', content: clean });
+                    }
+                    scrollToBottom();
+                })
+                .catch(function(err) {
+                    textEl.innerHTML = escapeHtml(NativeHttp.explainError(err, url));
+                    scrollToBottom();
+                });
+                return;
+            }
+
             fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + config.apiKey
                 },
-                body: JSON.stringify({
-                    model: config.model,
-                    messages: apiMessages,
-                    stream: true,
-                    max_tokens: 500,
-                    temperature: 0.7,
-                    thinking: { type: "disabled" }
-                })
+                body: JSON.stringify(payload)
             })
             .then(function(response) {
                 if (!response.ok) {
@@ -2144,7 +2312,7 @@ function executeInsight(modeId) {
                 readChunk();
             })
             .catch(function(err) {
-                textEl.innerHTML = '连接 AI 失败: ' + escapeHtml(err.message) + '。请检查 API 地址和密钥设置。';
+                textEl.innerHTML = escapeHtml(NativeHttp.explainError(err, url));
                 scrollToBottom();
             });
         }
@@ -2169,17 +2337,22 @@ function executeInsight(modeId) {
             if (content) content.classList.toggle('open');
         }
 
-        function showTypingIndicator() {
+        function showTypingIndicator(isInsight) {
             var messagesContainer = document.getElementById('nianChatMessages');
             var id = 'typing-' + Date.now();
             var typingMsg = document.createElement('div');
             typingMsg.className = 'nian-message assistant nian-message-typing';
             typingMsg.id = id;
-            typingMsg.innerHTML = '<div class="nian-message-text">' +
-                '<div class="nian-message-typing-dot"></div>' +
-                '<div class="nian-message-typing-dot"></div>' +
-                '<div class="nian-message-typing-dot"></div>' +
-            '</div>';
+            // 洞察场景：不用打字点动画，显示纯文字"分析中"，避免误导为"思考"
+            if (isInsight) {
+                typingMsg.innerHTML = '<div class="nian-message-text" style="color:var(--text-muted);font-size:13px">AI 分析中…</div>';
+            } else {
+                typingMsg.innerHTML = '<div class="nian-message-text">' +
+                    '<div class="nian-message-typing-dot"></div>' +
+                    '<div class="nian-message-typing-dot"></div>' +
+                    '<div class="nian-message-typing-dot"></div>' +
+                '</div>';
+            }
             messagesContainer.appendChild(typingMsg);
             scrollToBottom();
             return id;
@@ -2652,19 +2825,53 @@ function executeInsight(modeId) {
                 alert('请输入内容');
                 return;
             }
-            var noteId = editingNoteIndex >= 0 ? notes[editingNoteIndex].id : ('note_' + Date.now());
+            // 时间戳 + 随机后缀，避免同毫秒保存覆盖
+            var noteId = editingNoteIndex >= 0 ? notes[editingNoteIndex].id : ('note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
             var contentEl = document.getElementById('noteContent');
             if (editorImages.length) {
                 content = content.replace(/<br\s*\/?>$/i, '').replace(/\n$/, '').trim();
 
+                // 已存在（编辑旧图，id 已记录且 base64 是 URL/空）的图片不重新上传，
+                // 只上传真正的新 base64 图，避免每次编辑产生垃圾解码和重复文件
+                var toUpload = [];
+                var indexMap = [];
+                for (var ui = 0; ui < editorImages.length; ui++) {
+                    var im = editorImages[ui];
+                    if (im.base64 && im.base64.indexOf('data:image') === 0) {
+                        toUpload.push(im.base64);
+                        indexMap.push(ui);
+                    } else {
+                        // 无新数据：保留原 id（旧图继续用原文件）
+                        editorImages[ui].base64 = '';
+                    }
+                }
+
+                if (toUpload.length === 0) {
+                    var keepHtml = editorImages.map(function(img) {
+                        var src = '';
+                        if (img.id && (typeof AndroidImage !== 'undefined')) {
+                            src = 'https://appassets.androidplatform.net/images/' + img.id + '.jpg';
+                        } else if (img.base64) {
+                            src = img.base64;
+                        }
+                        return '<img src="' + src + '" alt="image" onclick="openImagePreview(\'' + img.id + '\')" onerror="onImageLoadError(this)" style="max-width:100%;border-radius:8px;margin:2px 1px;cursor:pointer" data-image-id="' + img.id + '">';
+                    }).join('');
+                    content = '--isHTML ' + content + keepHtml;
+                    finishSaveNote(content, noteId);
+                    return;
+                }
+
                 ImageService.saveImages(
-                    editorImages.map(function(img) { return img.base64; }),
+                    toUpload,
                     noteId
                 ).then(function(results) {
                     results.forEach(function(result, idx) {
                         if (result.id) {
-                            editorImages[idx].id = result.id;
-                            editorImages[idx].path = result.path;
+                            var target = indexMap[idx];
+                            if (target !== undefined && target < editorImages.length) {
+                                editorImages[target].id = result.id;
+                                editorImages[target].path = result.path;
+                            }
                         }
                     });
                     var imagesHtml = editorImages.map(function(img) {
@@ -2723,8 +2930,15 @@ function executeInsight(modeId) {
             extractMemoryFromNote(content);
         }
 
+        // 记忆提取节流：两次提取至少间隔 30s，避免快速连续保存笔记时打爆 API
+        var lastMemoryExtractAt = 0;
+
         function extractMemoryFromNote(rawContent) {
             if (typeof AndroidMemory === 'undefined' || !AndroidMemory) return;
+            var now = Date.now();
+            if (now - lastMemoryExtractAt < 30000) return;
+            lastMemoryExtractAt = now;
+
             var plain = rawContent;
             if (plain.indexOf('--isHTML ') === 0) plain = plain.substring(9);
             plain = plain.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
@@ -2734,308 +2948,232 @@ function executeInsight(modeId) {
             try { config = DataService.settings.load(); } catch(e) {}
             if (!config || !config.apiUrl || !config.apiKey) return;
 
-            // 1) LLM 提炼候选事实 (JSON: {candidates:[{fact,category,keywords[]}]})
-            var url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', url);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('Authorization', 'Bearer ' + config.apiKey);
-            xhr.timeout = 15000;
+            var url = NativeHttp.chatEndpoint(config.apiUrl);
+            var headers = { Authorization: 'Bearer ' + config.apiKey };
 
-            xhr.onload = function() {
-                if (xhr.status < 200 || xhr.status >= 300) return;
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                    if (!text || text.trim().length < 5) return;
-                    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
-                    if (!text) return;
-
-                    // 解析 LLM JSON 输出
-                    var candidates = [];
-                    try {
-                        var jsonMatch = text.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) {
-                            var parsed = JSON.parse(jsonMatch[0]);
-                            if (parsed && Array.isArray(parsed.candidates)) {
-                                candidates = parsed.candidates;
-                            }
-                        }
-                    } catch(e) {}
-                    if (candidates.length === 0) {
-                        // fallback: 按行 split
-                        candidates = text.split('\n')
-                            .map(function(s){ return s.replace(/^[•\-\*\d\.\s]+/, '').trim(); })
-                            .filter(function(s){ return s.length >= 5; })
-                            .map(function(f){ return { fact: f, category: 'event', keywords: [] }; });
-                    }
-                    if (candidates.length === 0) return;
-
-                    // 2) 调 dedup_facts 走 50 条 LLM 精判
-                    if (typeof window.dedupFactsSkill === 'undefined') return;
-                    window.dedupFactsSkill.judge({
-                        candidates: candidates,
-                        config: config
-                    }).then(function(result) {
-                        if (!result || !result.candidates) return;
-                        var actions = result.candidates;
-                        for (var i = 0; i < actions.length; i++) {
-                            var a = actions[i];
-                            if (!a || !a.action) continue;
-                            if (a.action === 'skip') continue;
-                            if (a.action === 'update' && a.targetId) {
-                                if (typeof window.__memoryUpdateFact === 'function') {
-                                    window.__memoryUpdateFact(a.targetId, a.newContent || a.new);
-                                }
-                            } else if (a.action === 'supersede' && a.targetId) {
-                                if (typeof window.__memorySupersedeFact === 'function') {
-                                    window.__memorySupersedeFact(a.targetId, {
-                                        fact: a.new,
-                                        category: a.category,
-                                        keywords: a.keywords,
-                                        reason: a.reason || '新事实 supersede'
-                                    });
-                                }
-                            } else if (a.action === 'add') {
-                                if (typeof window.__memoryAddFact === 'function') {
-                                    window.__memoryAddFact({
-                                        fact: a.new,
-                                        category: a.category || 'event',
-                                        source: 'diary:' + new Date().toISOString().substring(0, 10),
-                                        keywords: a.keywords || [],
-                                        confidence: 0.7
-                                    });
-                                }
-                            }
-                        }
-                        // 写回持久化
-                        try {
-                            var memRaw = AndroidMemory.loadAll();
-                            var mem = JSON.parse(memRaw);
-                            if (typeof window.renderMemorySkill !== 'undefined') {
-                                window.renderMemorySkill.apply(mem);
-                            }
-                            AndroidMemory.saveAll(JSON.stringify(mem));
-                        } catch(e) {}
-                        // 触发 dreaming 检查（自动阈值判断在 app.js scope 外不可用，由用户在记忆页面手动触发）
-                        try { if (typeof checkDreaming === 'function') checkDreaming(); } catch(e) {}
-                    }).catch(function(){});
-                } catch(e) {}
-            };
-
-            xhr.send(JSON.stringify({
+            // Android 走原生桥（无 CORS），浏览器走 XHR
+            // v4：提取「时刻」（标题 § 原话 § 情绪），写入 moments 而非事实列表
+            NativeHttp.postJson(url, headers, {
                 model: config.model || 'gpt-4o',
                 messages: [
-                    { role: 'system', content: '你是一个事实提取助手。从用户日记中提取可验证的个人事实。\n\n严格按以下 JSON 输出（不要其他说明）:\n{"candidates":[{"fact":"...","category":"identity|preference|relationship|goal|emotion|belief|health|event","keywords":["3-5个核心词"]}]}\n\n要求:\n- 每条 fact 一句话，独立成事\n- 客观陈述不评价\n- 无值得提取时输出 {"candidates":[]}\n- 不输出思考过程' },
-                    { role: 'user', content: '日记:\n' + plain }
+                    { role: 'system', content: (typeof MemoryService !== 'undefined' && MemoryService.TASK_PROMPTS)
+                        ? MemoryService.TASK_PROMPTS.extractSystem
+                        : '你是记忆提取助手。从日记中提取值得记住的时刻，每行输出「标题 § 原话(不超过30字) § 情绪」。情绪只能是：开心/平静/期待/感动/焦虑/难过/疲惫/生气/孤单/平常。没有值得记住的时刻则回复"无"。不要输出思考过程。' },
+                    { role: 'user', content: '从以下日记中提取时刻：\n\n' + plain }
                 ],
                 temperature: 0.3,
-                max_tokens: 500,
-                thinking: { type: "disabled" },
-                response_format: { type: 'json_object' }
-            }));
+                max_tokens: 500
+            }).then(function(data) {
+                var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                if (!text || text.trim().length < 5) return;
+
+                // 解析时刻行 → 写入 moments（统一走 MemoryService：去重 + 上限）
+                if (writeMomentsFromExtraction(text)) {
+                    // 触发回忆信检查
+                    checkDreaming();
+                }
+            }, function() {
+                // 提取失败静默忽略，不影响用户
+            });
         }
+
+        // 解析笔记提取结果（标题 § 原话 § 情绪）写入情节记忆（v5 episodes）
+        function writeMomentsFromExtraction(text) {
+            try {
+                if (typeof MemoryService === 'undefined' || typeof MemoryService.addMemory !== 'function') return false;
+                var emoMap = { '开心': '开心', '平静': '平静', '期待': '期待', '感动': '开心', '焦虑': '焦虑', '难过': '低落', '疲惫': '疲惫', '生气': '愤怒', '孤单': '低落', '平常': '平静' };
+                var added = false;
+                var lines = String(text).split(/\r?\n/);
+                for (var li = 0; li < lines.length; li++) {
+                    var line = lines[li].trim();
+                    if (!line || line === '无') continue;
+                    if (line.indexOf('§') === -1) continue;
+                    var parts = line.split('§');
+                    var excerpt = (parts[1] || '').trim();
+                    if (!excerpt) continue;
+                    var label = (parts[2] || '').trim();
+                    var r = MemoryService.addMemory('episode', {
+                        title: (parts[0] || '').trim(),
+                        summary: excerpt,
+                        occurredAt: new Date().toISOString(),
+                        emotion: emoMap[label] || '其他',
+                        intensity: 0.5,
+                        context: '来自笔记',
+                        tags: ['笔记'],
+                        source: 'note'
+                    });
+                    if (r && (r.action === 'created' || r.action === 'contextual')) added = true;
+                }
+                return added;
+            } catch(e) { return false; }
+        }
+
+        // ─── 自动记忆提取：每轮对话结束后后台提取事实/偏好/情节/语义，冲突进入待确认。
+        // 串行队列，避免并发写同一份记忆；失败静默，不打扰对话 ───
+        var memoryExtractQueue = [];
+        var memoryExtracting = false;
+
+        function silentExtractFromChat(userMessage, assistantText) {
+            try {
+                if (typeof MemoryEngine === 'undefined' || typeof MemoryService === 'undefined') return;
+                if (!userMessage || String(userMessage).trim().length < 2) return;
+                var config;
+                try { config = DataService.settings.load(); } catch(e) {}
+                if (!config || !config.apiUrl || !config.apiKey) return;
+                memoryExtractQueue.push({ user: String(userMessage), assistant: String(assistantText || '') });
+                pumpMemoryExtract();
+            } catch(e) {}
+        }
+
+        function pumpMemoryExtract() {
+            if (memoryExtracting || !memoryExtractQueue.length || typeof MemoryEngine === 'undefined') return;
+            memoryExtracting = true;
+            var job = memoryExtractQueue.shift();
+            var finish = function() {
+                memoryExtracting = false;
+                setTimeout(pumpMemoryExtract, 200);
+            };
+            MemoryEngine.processTurn({ userMessage: job.user, assistantText: job.assistant }).then(function(r) {
+                finish();
+                if (!r || !r.ok) return;
+                var n = r.created.facts + r.created.preferences + r.created.episodes + r.created.semantic;
+                if (n > 0 && typeof showToast === 'function') showToast('记住了 ' + n + ' 条关于你的事');
+                if (r.questions && r.questions.length) appendMemoryConfirm(r.questions[0]);
+                // L2 摘要记忆：每 8 轮对话总结一次
+                try {
+                    var turnCount = parseInt(localStorage.getItem('nian_mem_turns') || '0', 10) + 1;
+                    localStorage.setItem('nian_mem_turns', String(turnCount));
+                    if (turnCount % 8 === 0 && typeof MemoryEngine.makeSummary === 'function') {
+                        MemoryEngine.makeSummary().then(function(sum) {
+                            if (sum && typeof showToast === 'function') showToast('已更新近况摘要');
+                        });
+                    }
+                } catch(e) {}
+            }, finish);
+        }
+
+        // 冲突确认：以一条温和的追问出现在对话里；用户下一轮回复会被提取引擎识别为 resolution
+        function appendMemoryConfirm(question) {
+            try {
+                var container = document.getElementById('nianChatMessages');
+                if (!container || !question) return;
+                var msg = document.createElement('div');
+                msg.className = 'nian-message assistant memory-confirm';
+                msg.innerHTML = '<div class="nian-message-text" style="border-left:3px solid #c9a227;padding-left:10px;color:#8a5a33">' +
+                    escapeHtml(question) + '</div>';
+                container.appendChild(msg);
+                scrollToBottom();
+            } catch(e) {}
+        }
+
+        // ─── Dreaming: 自动记忆整理 ───
+        var isDreamingRunning = false;
+
+        function checkDreaming() {
+            try {
+                var s = DataService.settings.load() || {};
+                var totalNotes = notes.length;
+                var lastCount = s.noteCountAtLastDream || 0;
+                var lastDreamAt = s.lastDreamAt || 0;
+                var newNotes = totalNotes - lastCount;
+                var oneWeek = 7 * 24 * 60 * 60 * 1000;
+
+                if (newNotes >= 10) {
+                    runDreaming();
+                } else if (newNotes >= 3 && (Date.now() - lastDreamAt) >= oneWeek) {
+                    runDreaming();
+                }
+            } catch(e) {}
+        }
+
         function runDreaming() {
             if (isDreamingRunning) return;
             isDreamingRunning = true;
-            showToast('阶段 1/3: 生成摘要...');
-            showDreamingBanner();
 
-            var doneAll = function(success) {
+            var done = function(msg) {
                 isDreamingRunning = false;
-                hideDreamingBanner();
-                try { sendDreamingMail(!!success); } catch(e) {}
-                showToast(success ? '记忆整理完成' : '记忆整理结束');
+                showToast(msg || '回忆信已完成');
             };
 
-            if (typeof AndroidMemory === 'undefined' || !AndroidMemory) { doneAll(false); return; }
-            var config;
-            try { config = DataService.settings.load(); } catch(e) {}
-            if (!config || !config.apiUrl || !config.apiKey) { doneAll(false); return; }
+            if (typeof AndroidMemory === 'undefined' || !AndroidMemory) { done(); return; }
+            if (typeof MemoryService === 'undefined' || typeof sendProactiveMailSkill === 'undefined') {
+                done('记忆系统不可用');
+                return;
+            }
 
-            var mem;
+            // 1) 本地归档超龄时刻（不耗 LLM）
             try {
-                var rawMem = AndroidMemory.loadAll();
-                mem = JSON.parse(rawMem);
-            } catch(e) { doneAll(false); return; }
-
-            if (!mem.docs) mem.docs = {};
-            if (!mem.facts) mem.facts = { verified: [], deprecated: [] };
-            if (!mem.themes) mem.themes = {};
-
-            showDreamingBanner('正在整理记忆，请勿退出页面');
-
-            // ── 收集全量笔记 + 对话 ──
-            var allNotes = notes.slice();  // notes 在模块作用域
-            var convText = '';
-            try {
-                var convsRaw = localStorage.getItem('nian_conversations');
-                var convs = convsRaw ? JSON.parse(convsRaw) : [];
-                convs.forEach(function(c) {
-                    if (c.messages && c.messages.length > 0) {
-                        convText += '\n--- 对话 ' + (c.title || '') + ' ---\n';
-                        c.messages.forEach(function(m) {
-                            convText += (m.role === 'user' ? '用户: ' : '念念: ') + m.content + '\n';
-                        });
-                    }
-                });
+                var mem = MemoryService.load();
+                if (mem && MemoryService.archiveOldMoments(mem)) MemoryService.save(mem);
             } catch(e) {}
 
-            // ── Stage 1: 逐批生成摘要 ──
-            var summaryLines = [];
-            var noteBatch = [];
-            var batchSize = 5;
-
-            function processNextBatch(idx) {
-                if (idx >= allNotes.length) {
-                    showDreamingBanner('阶段 2/3: 主题聚类...');
-                    setTimeout(function() { stage2Themes(); }, 200);
-                    return;
-                }
-                var note = allNotes[idx];
-                var plain = (note.content || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
-                if (plain.length < 10) {
-                    processNextBatch(idx + 1);
-                    return;
-                }
-                noteBatch.push({ date: (note.createdAt || '').substring(0, 10), text: plain });
-
-                if (noteBatch.length >= batchSize || idx >= allNotes.length - 1) {
-                    // 发这批复给 LLM
-                    var batchText = noteBatch.map(function(n) {
-                        return '[' + n.date + '] ' + n.text.substring(0, 300);
-                    }).join('\n\n');
-                    var payload = JSON.stringify({
-                        model: config.model || 'deepseek-v4-flash',
-                        messages: [
-                            { role: 'system', content: '你是摘要提炼助手。对每篇日记生成一条 8-50 字的结构化摘要（抓事件/观点/关系）。纯情绪无信息量的输出"无"。\n\n严格按 JSON 输出:\n{"summaries":[{"date":"日期","tag":"日记|思考|对话","text":"摘要或\"无\""}]}' },
-                            { role: 'user', content: '日记:\n' + batchText }
-                        ],
-                        temperature: 0.3, max_tokens: 500, thinking: { type: 'disabled' }
-                    });
-
-                    var url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
-                    var qs = 'token=' + encodeURIComponent(config.apiKey) + '&q=' + encodeURIComponent(payload);
-                    var sep = url.indexOf('?') === -1 ? '?' : '&';
-
-                    try {
-                        var rawResp = AndroidHttp.get(url + sep + qs);
-                        var data = JSON.parse(rawResp);
-                        var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                        if (text) {
-                            text = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
-                            var parsed = null;
-                            try { var m = text.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); } catch(e) {}
-                            if (parsed && Array.isArray(parsed.summaries)) {
-                                parsed.summaries.forEach(function(s) {
-                                    if (s.text && s.text !== '无' && s.text.length >= 8 && s.text.length <= 80) {
-                                        var line = '- ' + s.date + ' [' + (s.tag || '日记') + '] — ' + s.text;
-                                        summaryLines.push(line);
-                                    }
-                                });
-                            }
-                        }
-                    } catch(e) {}
-
-                    noteBatch = [];
-                    // 每批之间等 200ms 避免太快
-                    setTimeout(function() { processNextBatch(idx + 1); }, 200);
-                } else {
-                    processNextBatch(idx + 1);
-                }
+            // 2) 取最近情节记忆，LLM 写一封有温度的回忆信（回忆仪式）
+            var memForDream = MemoryService.load() || {};
+            var dreamEpisodes = (memForDream.episodes || []).filter(function(e) {
+                return e && e.status === 'active' && e.summary;
+            }).sort(function(a, b) {
+                return String(b.occurredAt || b.createdAt) < String(a.occurredAt || a.createdAt) ? -1 : 1;
+            }).slice(0, 20);
+            if (!dreamEpisodes.length) {
+                resetDreamCounter();
+                done('还没有值得写信的回忆');
+                return;
             }
 
-            // ── Stage 2: 主题聚类 + 周复盘 ──
-            function stage2Themes() {
-                showDreamingBanner('阶段 2/3: 主题聚类...');
-                // 写入摘要到 SUMMARY.md
-                if (summaryLines.length > 0) {
-                    var sumCur = mem.docs['SUMMARY.md'].content || '';
-                    // 去重现有 + 新增
-                    var existingLines = sumCur.split('\n').filter(function(l) { return l.indexOf('- 2') === 0; });
-                    summaryLines.forEach(function(l) {
-                        if (existingLines.indexOf(l) === -1) existingLines.push(l);
-                    });
-                    // 时间倒序
-                    existingLines.sort().reverse();
-                    mem.docs['SUMMARY.md'].content = '# SUMMARY.md\n\n> 时间线 · 摘要记忆\n> 四道关卡: 字数 8-50 / 信息密度 / 情绪累计 / 正则拦截\n\n' + existingLines.join('\n');
-                    mem.docs['SUMMARY.md'].updatedAt = new Date().toISOString();
-                }
+            var config;
+            try { config = DataService.settings.load(); } catch(e) {}
+            if (!config || !config.apiUrl || !config.apiKey) { done('请先配置 AI 参数'); return; }
 
-                // 取 facts + 新摘要一起聚类
-                var factsText = (mem.facts.verified || []).map(function(f, i) { return '[' + i + '] ' + f.fact; }).join('\n');
-                var sumText = summaryLines.slice(-30).join('\n');
+            var lines = dreamEpisodes.map(function(e, idx) {
+                var t = MemoryService.relativeTime(e.occurredAt || e.createdAt);
+                return (idx + 1) + '. ' + (t ? t + ' ' : '') + (e.emotion ? '（' + e.emotion + '）' : '') +
+                    (e.title ? e.title + '：' : '') + (e.summary || '');
+            }).join('\n');
 
-                if ((factsText.length + sumText.length) < 20) {
-                    showDreamingBanner('阶段 3/3: 存入记忆...');
-                    resetDreamCounter();
-                    AndroidMemory.saveAll(JSON.stringify(mem));
-                    doneAll(true);
-                    return;
-                }
-
-                var payload = JSON.stringify({
-                    model: config.model || 'deepseek-v4-flash',
+                // 3) 定期压缩沉淀：近期时刻 → LLM 提炼为「•」概要行 → 并入 files.memory（概要记忆层）
+            try {
+                var msoul = (mem && mem.files && mem.files.soul) || '';
+                var muser = (mem && mem.files && mem.files.user) || '';
+                var condensePrompt = (MemoryService.TASK_PROMPTS && MemoryService.TASK_PROMPTS.dreamSystem)
+                    ? MemoryService.TASK_PROMPTS.dreamSystem(msoul, muser)
+                    : '你是一个记忆整理助手。把用户的关键状态信息提炼为「•」开头的事实行，合并重复，删除琐碎，保留情绪、偏好、目标、关系。';
+                var url = NativeHttp.chatEndpoint(config.apiUrl);
+                NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, {
+                    model: config.model || 'gpt-4o',
                     messages: [
-                        { role: 'system', content: '你是记忆整理助手。基于用户的事实记忆和摘要，做主题聚类（情绪/时间/讨论主题三类）和本周周复盘。\n\n严格按 JSON 输出:\n{"themes":[{"name":"主题名(2-6字)","content":"描述(50-200字)"}],"weekly":[{"week":"2026-W25","content":"本周回顾"}]}\n\n不输出思考过程。' },
-                        { role: 'user', content: '事实:\n' + factsText + '\n\n最近摘要:\n' + sumText }
+                        { role: 'system', content: condensePrompt },
+                        { role: 'user', content: '请把这些时刻提炼为用户的关键状态信息（情绪倾向、偏好、目标进展、关系、健康）：\n\n' + lines }
                     ],
-                    temperature: 0.3, max_tokens: 1000, thinking: { type: 'disabled' }
-                });
-
-                var url = config.apiUrl.replace(/\/+$/, '') + '/chat/completions';
-                var qs = 'token=' + encodeURIComponent(config.apiKey) + '&q=' + encodeURIComponent(payload);
-                var sep = url.indexOf('?') === -1 ? '?' : '&';
-
-                setTimeout(function() {
-                    try {
-                        var rawResp = AndroidHttp.get(url + sep + qs);
-                        var data = JSON.parse(rawResp);
-                        var text2 = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-                        if (text2) {
-                            text2 = text2.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
-                            var parsed2 = null;
-                            try { var m = text2.match(/\{[\s\S]*\}/); if (m) parsed2 = JSON.parse(m[0]); } catch(e) {}
-                            if (parsed2) {
-                                if (Array.isArray(parsed2.themes)) {
-                                    mem.themes = mem.themes || {};
-                                    parsed2.themes.forEach(function(t) {
-                                        if (t && t.name && t.content) mem.themes[t.name + '.md'] = t.content;
-                                    });
-                                }
-                                if (Array.isArray(parsed2.weekly)) {
-                                    var sc = mem.docs['SUMMARY.md'].content || '';
-                                    sc += '\n\n## 周复盘\n';
-                                    parsed2.weekly.forEach(function(w) {
-                                        sc += '### ' + (w.week || '') + '\n' + (w.content || '') + '\n\n';
-                                    });
-                                    mem.docs['SUMMARY.md'].content = sc;
-                                    mem.docs['SUMMARY.md'].updatedAt = new Date().toISOString();
-                                }
-                            }
+                    temperature: 0.3,
+                    max_tokens: 600
+                }).then(function(data) {
+                    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (text) {
+                        text = text.replace(/ thinking[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
+                        if (text.length > 5 && text !== 'KEEP' && typeof MemoryService !== 'undefined') {
+                            // 并入概要层（去重 + 上限由 appendMemory 保证）
+                            MemoryService.appendMemory(text);
                         }
-                    } catch(e) {}
+                    }
+                }, function() {});
+            } catch(e) {}
 
-                    mem.dreaming = mem.dreaming || {};
-                    mem.dreaming.lastRunAt = new Date().toISOString();
-                    AndroidMemory.saveAll(JSON.stringify(mem));
-                    resetDreamCounter();
-                    showToast('阶段 3/3: 记忆整理完成 ✓');
-                    doneAll(true);
-                }, 100);
-            }
-
-            // 如果有对话内容也加入
-            if (convText.length > 50) {
-                // 把对话内容切成段，伪装成笔记加进去
-                var convParts = convText.split('\n---').filter(function(s) { return s.trim().length > 10; });
-                convParts.forEach(function(p) {
-                    allNotes.push({ content: p, createdAt: new Date().toISOString() });
-                });
-            }
-
-            if (allNotes.length === 0) { stage2Themes(); return; }
-            processNextBatch(0);
+            // 4) 回忆仪式：LLM 写一封有温度的回忆信，送到信箱
+            showToast('正在写回忆信…');
+            generateWarmText(MemoryService.TASK_PROMPTS.letterSystem,
+                '以下是你最近和用户一起经历的时刻：\n\n' + lines + '\n\n请给用户写一封回忆信。'
+            ).then(function(text) {
+                resetDreamCounter();
+                if (text) {
+                    var subject = '小满的' + (new Date().getMonth() + 1) + '月回忆信';
+                    try {
+                        sendProactiveMailSkill.execute({ subject: subject, message: text });
+                        done('回忆信已送到信箱');
+                    } catch(e) { done('写信失败'); }
+                } else {
+                    done('回忆信生成失败，稍后再试');
+                }
+            });
         }
 
         function resetDreamCounter() {
@@ -3047,14 +3185,92 @@ function executeInsight(modeId) {
             } catch(e) {}
         }
 
-        function sendDreamingMail(hasChanges) {
-            if (typeof sendProactiveMailSkill === 'undefined') return;
-            var subject = hasChanges ? '记忆整理完成' : '记忆已检查';
-            var message = hasChanges
-                ? '我刚刚整理了一下你的记忆碎片，去除了重复和琐碎的内容，把相关的事实归并到了一起。现在你的记忆更清晰了。'
-                : '我检查了一下你的记忆，目前没有什么需要整理的，一切都很清楚。';
-            try { sendProactiveMailSkill.execute({ subject: subject, message: message }); } catch(e) {}
+        // LLM 生成温暖文本（回忆信/关怀信共用）。失败或未配置返回 null。
+        function generateWarmText(systemPrompt, userContent) {
+            return new Promise(function(resolve) {
+                var config;
+                try { config = DataService.settings.load(); } catch(e) {}
+                if (!config || !config.apiUrl || !config.apiKey) { resolve(null); return; }
+                var url = NativeHttp.chatEndpoint(config.apiUrl);
+                NativeHttp.postJson(url, { Authorization: 'Bearer ' + config.apiKey }, {
+                    model: config.model || 'gpt-4o',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userContent }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 600
+                }).then(function(data) {
+                    var text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (text) {
+                        text = text.replace(/ thinking[\s\S]*?<\/think>/g, '').replace(/<\/?think>/gi, '').trim();
+                    }
+                    resolve(text || null);
+                }, function() { resolve(null); });
+            });
         }
+
+        // 对话完成后，检查小满的回复是否提到了某段回忆 → 记一次提起（防止反复炒冷饭）
+        function markRecalledMoments(assistantText) {
+            try {
+                if (typeof MemoryService === 'undefined' || !assistantText) return;
+                var mem = MemoryService.load();
+                if (!mem || !Array.isArray(mem.episodes) || !mem.episodes.length) return;
+                var ids = [];
+                for (var mi = 0; mi < mem.episodes.length; mi++) {
+                    var e = mem.episodes[mi];
+                    if (!e || e.status !== 'active' || !e.summary) continue;
+                    var ex = String(e.summary).trim();
+                    if (!ex) continue;
+                    var frag = ex.length > 8 ? ex.substring(0, 8) : ex;
+                    if (frag.length >= 4 && assistantText.indexOf(frag) !== -1) ids.push(e.id);
+                }
+                if (ids.length) MemoryService.markRecalledEpisodes(ids);
+            } catch(e) {}
+        }
+
+        // ─── 情绪感知关怀：最近 3 天负面时刻 ≥2 且 24h 内未关怀过 → 小满主动写关心信 ───
+        function scanMoodCare() {
+            try {
+                if (typeof MemoryService === 'undefined') return;
+                if (typeof sendProactiveMailSkill === 'undefined') return;
+                var s = DataService.settings.load() || {};
+                var last = parseInt(s.lastMoodCareAt, 10) || 0;
+                if (last && (Date.now() - last) < 24 * 60 * 60 * 1000) return;
+
+                var memCare = MemoryService.load() || {};
+                var cutoff = Date.now() - 3 * 86400000;
+                var recent = (memCare.episodes || []).filter(function(e) {
+                    if (!e || e.status !== 'active') return false;
+                    var t = new Date(e.occurredAt || e.createdAt).getTime();
+                    return t && t >= cutoff;
+                });
+                var negatives = recent.filter(function(e) {
+                    return ['低落', '焦虑', '愤怒', '疲惫'].indexOf(e.emotion) !== -1;
+                });
+                if (negatives.length < 2) return;
+
+                var lines = negatives.map(function(e, idx) {
+                    var t = MemoryService.relativeTime(e.occurredAt || e.createdAt);
+                    return (idx + 1) + '. ' + (t ? t + ' ' : '') + (e.summary || e.title || '');
+                }).join('\n');
+
+                var fallback = '这几天看到你的记录，好像有些辛苦。想说的话都可以说给我听，我会一直在。';
+                generateWarmText(MemoryService.TASK_PROMPTS.careSystem,
+                    '用户最近几天的状态（可能不太好）：\n\n' + lines
+                ).then(function(text) {
+                    try {
+                        sendProactiveMailSkill.execute({ subject: '小满想看看你', message: text || fallback });
+                    } catch(e) {}
+                    try {
+                        var st = DataService.settings.load() || {};
+                        st.lastMoodCareAt = String(Date.now());
+                        DataService.settings.save(st);
+                    } catch(e) {}
+                });
+            } catch(e) {}
+        }
+
 function shareNote(encodedContent) {
 
         function manualTriggerDreaming() {
@@ -3105,7 +3321,7 @@ function shareNote(encodedContent) {
             if (typeof AndroidStorage !== 'undefined') {
                 window.location.href = 'insight/insight.html';
             } else {
-                window.location.href = 'insight/insight.html';
+                window.location.href = 'app/src/main/assets/insight/insight.html';
             }
         }
 
@@ -3129,12 +3345,170 @@ function shareNote(encodedContent) {
             document.getElementById('insightSheetOverlay').classList.remove('open');
         }
 
+        // ─── AI 配图弹窗 ───
+        var _imageGenNoteId = null;
+        var _imageGenStyle = 'illustration';
+        var _imageGenResultImageId = null;
+        var _imageGenResultSrc = null;
+        var IMAGE_GEN_STYLES = [
+            { id: 'illustration', name: '插画风', thumb: 'styles/illustration_thumb.jpg' },
+            { id: 'watercolor', name: '水彩风', thumb: 'styles/watercolor_thumb.jpg' },
+            { id: 'realistic', name: '写实风', thumb: 'styles/realistic_thumb.jpg' },
+            { id: 'healing', name: '治愈系', thumb: 'styles/healing_thumb.jpg' },
+            { id: 'minimal', name: '极简风', thumb: 'styles/minimal_thumb.jpg' }
+        ];
+        // 设置风格预览图（覆盖默认缩略图，可传入完整 URL）
+        window.setImageGenStyleThumbs = function(thumbs) {
+            for (var i = 0; i < IMAGE_GEN_STYLES.length; i++) {
+                if (thumbs[IMAGE_GEN_STYLES[i].id]) {
+                    IMAGE_GEN_STYLES[i].thumb = thumbs[IMAGE_GEN_STYLES[i].id];
+                }
+            }
+        };
+        // 拼完整预览图 URL：Android 走 WebViewAssetLoader，浏览器走相对路径
+        function styleThumbSrc(s) {
+            if (!s.thumb) return '';
+            if (/^(https?:|data:)/.test(s.thumb)) return s.thumb;
+            if (typeof AndroidImage !== 'undefined') {
+                return 'https://appassets.androidplatform.net/assets/' + s.thumb;
+            }
+            return s.thumb;
+        }
+        function openImageGenSheet(noteId) {
+            _imageGenNoteId = noteId;
+            _imageGenStyle = 'illustration';
+            _imageGenResultImageId = null;
+            _imageGenResultSrc = null;
+            var container = document.getElementById('imageGenStyles');
+            container.innerHTML = IMAGE_GEN_STYLES.map(function(s) {
+                var active = s.id === 'illustration' ? ' active' : '';
+                var src = styleThumbSrc(s);
+                var thumbHtml = src
+                    ? '<img src="' + src + '" alt="' + s.name + '" onerror="this.parentNode.innerHTML=\'<span style=&quot;font-size:28px;opacity:0.3&quot;>🎨</span>\'">'
+                    : '<span style="font-size:28px;opacity:0.3">🎨</span>';
+                return '<div class="image-gen-style-card' + active + '" data-style="' + s.id + '" onclick="selectImageGenStyle(\'' + s.id + '\')">' +
+                    '<div class="image-gen-style-thumb">' + thumbHtml + '</div>' +
+                    '<div class="image-gen-style-name">' + s.name + '</div>' +
+                    '</div>';
+            }).join('');
+            document.getElementById('imageGenResult').classList.remove('show');
+            document.getElementById('imageGenResult').innerHTML = '';
+            document.getElementById('imageGenStatus').textContent = '';
+            document.getElementById('imageGenBtn').textContent = '生成配图';
+            document.getElementById('imageGenBtn').disabled = false;
+            document.getElementById('imageGenSheet').classList.add('open');
+            document.getElementById('imageGenOverlay').classList.add('open');
+            closeAllNoteMenus();
+        }
+        function closeImageGenSheet() {
+            _imageGenNoteId = null;
+            _imageGenResultImageId = null;
+            _imageGenResultSrc = null;
+            var resultEl = document.getElementById('imageGenResult');
+            if (resultEl) { resultEl.classList.remove('show'); resultEl.innerHTML = ''; }
+            document.getElementById('imageGenSheet').classList.remove('open');
+            document.getElementById('imageGenOverlay').classList.remove('open');
+        }
+        window.selectImageGenStyle = function(id) {
+            _imageGenStyle = id;
+            document.querySelectorAll('.image-gen-style-card').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            var card = document.querySelector('.image-gen-style-card[data-style="' + id + '"]');
+            if (card) card.classList.add('active');
+        };
+        // 下载生成的配图
+        window.downloadGeneratedImage = function() {
+            var src = _imageGenResultSrc;
+            if (!src) return;
+            // Android 端：打开系统浏览器下载（等下，WebView 内 http 会被拦截转系统浏览器）
+            // 图片是 https://appassets.androidplatform.net/... 或 data:base64
+            // 最简单：在新窗口打开图片
+            window.open(src, '_blank');
+        };
+        // 配图成功后：从存储刷新内存笔记数组（skill 是唯一写 content 的地方）
+        function refreshNoteAfterImageGen(noteId) {
+            var fresh = loadNotes();
+            for (var i = 0; i < notes.length; i++) {
+                if (notes[i].id !== noteId) continue;
+                for (var f = 0; f < fresh.length; f++) {
+                    if (fresh[f].id === noteId) {
+                        notes[i].content = fresh[f].content;
+                        break;
+                    }
+                }
+                return;
+            }
+        }
+        window.generateNoteImage = function() {
+            if (!_imageGenNoteId) return;
+            var btn = document.getElementById('imageGenBtn');
+            var status = document.getElementById('imageGenStatus');
+            btn.textContent = '生成中…';
+            btn.disabled = true;
+            status.textContent = 'AI 正在根据笔记内容创作配图…';
+            status.className = 'image-gen-status';
+            var skill = typeof window.generateNoteImageSkill !== 'undefined' ? window.generateNoteImageSkill : null;
+            if (skill) {
+                skill.execute({ noteId: _imageGenNoteId, style: _imageGenStyle }).then(function(result) {
+                    if (result && result.success) {
+                        status.textContent = '配图已生成，已挂到笔记';
+                        status.className = 'image-gen-status';
+                        btn.textContent = '重新生成';
+                        btn.disabled = false;
+                        // 生成结果直接展示在弹窗下方
+                        _imageGenResultImageId = result.imageId || '';
+                        _imageGenResultSrc = (typeof AndroidImage !== 'undefined' && result.imageId)
+                            ? 'https://appassets.androidplatform.net/images/' + result.imageId + '.jpg'
+                            : (result.imageSrc || '');
+                        var resultEl = document.getElementById('imageGenResult');
+                        if (_imageGenResultSrc) {
+                            resultEl.innerHTML =
+                                '<img src="' + _imageGenResultSrc + '" alt="配图">' +
+                                '<div class="image-gen-result-actions">' +
+                                '<button class="image-gen-download-btn" onclick="downloadGeneratedImage()">下载</button>' +
+                                '<button class="image-gen-redo-btn" onclick="generateNoteImage()">换一张</button>' +
+                                '</div>';
+                            resultEl.classList.add('show');
+                        }
+                        refreshNoteAfterImageGen(_imageGenNoteId);
+                        persistNotes();
+                        if (currentPage === 'notes') {
+                            renderNotes(currentTagFilter);
+                            setTimeout(loadNoteImages, 150);
+                        }
+                    } else {
+                        btn.textContent = '生成配图';
+                        btn.disabled = false;
+                        status.textContent = result && result.error ? result.error : '配图生成失败';
+                        status.className = 'image-gen-status error';
+                    }
+                });
+            } else {
+                btn.textContent = '生成配图';
+                btn.disabled = false;
+                status.textContent = '配图功能不可用';
+                status.className = 'image-gen-status error';
+            }
+        };
+        // skill 侧钩子（agent 对话中直接配图时）：刷新内存数组 + 重渲染
+        window.__onNoteImageGenerated = function(noteId, imageId) {
+            try {
+                refreshNoteAfterImageGen(noteId);
+                persistNotes();
+                if (currentPage === 'notes') {
+                    renderNotes(currentTagFilter);
+                    setTimeout(loadNoteImages, 150);
+                }
+            } catch(e) {}
+        };
+
         function startInsight(noteId, methodId) {
             closeInsightSheet();
             if (typeof AndroidStorage !== 'undefined') {
                 window.location.href = 'insight/insight.html?noteId=' + encodeURIComponent(noteId) + '&methodId=' + encodeURIComponent(methodId);
             } else {
-                window.location.href = 'insight/insight.html?noteId=' + encodeURIComponent(noteId) + '&methodId=' + encodeURIComponent(methodId);
+                window.location.href = 'app/src/main/assets/insight/insight.html?noteId=' + encodeURIComponent(noteId) + '&methodId=' + encodeURIComponent(methodId);
             }
         }
 
@@ -3147,30 +3521,6 @@ function shareNote(encodedContent) {
             }, 2000);
             document.querySelectorAll('.note-menu').forEach(function(m) { m.classList.remove('open'); });
             document.querySelectorAll('.note-card-wrapper.menu-open').forEach(function(w) { w.classList.remove('menu-open'); });
-        }
-
-        function showDreamingBanner(message) {
-            var b = document.getElementById('dreamingBanner');
-            if (!b) {
-                b = document.createElement('div');
-                b.id = 'dreamingBanner';
-                b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--accent);color:#fff;text-align:center;padding:14px 16px calc(14px + var(--safe-area-bottom, 0px));font-family:"Noto Sans SC",sans-serif;font-size:14px;font-weight:500;letter-spacing:0.5px;animation:dreamingPulse 2s ease-in-out infinite;';
-                document.body.appendChild(b);
-                // Pulse animation
-                if (!document.getElementById('dreamingStyle')) {
-                    var s = document.createElement('style');
-                    s.id = 'dreamingStyle';
-                    s.textContent = '@keyframes dreamingPulse{0%,100%{opacity:0.95}50%{opacity:1}}';
-                    document.head.appendChild(s);
-                }
-            }
-            b.textContent = '🔮 ' + message;
-            b.style.display = 'block';
-        }
-
-        function hideDreamingBanner() {
-            var b = document.getElementById('dreamingBanner');
-            if (b) b.style.display = 'none';
         }
 
         function updateSidebarStats() {
@@ -3227,7 +3577,6 @@ function shareNote(encodedContent) {
         });
 
         var currentSettingsSub = null;
-        var currentSettingsParent = null;
 
         function openSettings() {
             closeSidebar();
@@ -3254,13 +3603,7 @@ function shareNote(encodedContent) {
             var subEl = document.getElementById('settingsSub' + sub.charAt(0).toUpperCase() + sub.slice(1));
             if (subEl) subEl.classList.add('active');
             currentSettingsSub = sub;
-            // 导入和导出的父级是 data
-            if (sub === 'import' || sub === 'export') {
-                currentSettingsParent = 'data';
-            } else {
-                currentSettingsParent = null;
-            }
-            var labelMap = { ai: 'AI 设置', data: '数据管理', import: '导入', export: '导出', prefs: '偏好设置', memory: '记忆管理', prompts: '提示词管理' };
+            var labelMap = { ai: 'AI 设置', import: '导入/导出', prefs: '偏好设置', memory: '记忆管理', prompts: '提示词管理' };
             document.getElementById('settingsTitle').textContent = labelMap[sub] || '设置';
             document.getElementById('settingsBackBtn').onclick = backToSettingsMenu;
             if (sub === 'ai') loadAISettings();
@@ -3269,10 +3612,6 @@ function shareNote(encodedContent) {
         }
 
         function backToSettingsMenu() {
-            if (currentSettingsParent) {
-                openSettingsSub(currentSettingsParent);
-                return;
-            }
             document.querySelectorAll('.settings-sub').forEach(function(el) { el.classList.remove('active'); });
             document.getElementById('settingsMenu').style.display = '';
             document.getElementById('settingsTitle').textContent = '设置';
@@ -3286,11 +3625,9 @@ function shareNote(encodedContent) {
                 if (data.apiUrl) document.getElementById('aiApiUrl').value = data.apiUrl;
                 if (data.apiKey) document.getElementById('aiApiKey').value = data.apiKey;
                 if (data.model) document.getElementById('aiModel').value = data.model;
-            }
-            var u = (window.getNianUser && window.getNianUser()) || {};
-            var userEl = document.getElementById('settingsCloudUsername');
-            if (userEl) {
-                userEl.textContent = u.username ? ('已登录：' + u.username) : '未登录';
+                if (data.imageModel) document.getElementById('aiImageModel').value = data.imageModel;
+                if (data.imageApiUrl) document.getElementById('aiImageApiUrl').value = data.imageApiUrl;
+                if (data.imageApiKey) document.getElementById('aiImageApiKey').value = data.imageApiKey;
             }
         }
 
@@ -3298,6 +3635,9 @@ function shareNote(encodedContent) {
             var apiUrl = document.getElementById('aiApiUrl').value.trim();
             var apiKey = document.getElementById('aiApiKey').value.trim();
             var model = document.getElementById('aiModel').value;
+            var imageModel = document.getElementById('aiImageModel').value.trim();
+            var imageApiUrl = document.getElementById('aiImageApiUrl').value.trim();
+            var imageApiKey = document.getElementById('aiImageApiKey').value.trim();
             var statusEl = document.getElementById('aiSettingsStatus');
 
             if (!apiUrl || !apiKey) {
@@ -3306,7 +3646,17 @@ function shareNote(encodedContent) {
                 return;
             }
 
-            var settings = { apiUrl: apiUrl, apiKey: apiKey, model: model };
+            // 合并保存，避免覆盖 insightPrompts / proactiveMails / lastDreamAt 等其他设置
+            var settings = DataService.settings.load() || {};
+            settings.apiUrl = apiUrl;
+            settings.apiKey = apiKey;
+            settings.model = model;
+            if (imageModel) settings.imageModel = imageModel;
+            else delete settings.imageModel;
+            if (imageApiUrl) settings.imageApiUrl = imageApiUrl;
+            else delete settings.imageApiUrl;
+            if (imageApiKey) settings.imageApiKey = imageApiKey;
+            else delete settings.imageApiKey;
             try {
                 DataService.settings.save(settings);
                 statusEl.textContent = '设置已保存';
@@ -3319,6 +3669,39 @@ function shareNote(encodedContent) {
                 statusEl.textContent = '保存失败';
                 statusEl.className = 'settings-status error';
             }
+        }
+
+        // 测试 AI 连接：发送一条简单消息，显示结果/错误，帮助诊断配置问题
+        function testAIConnection() {
+            var statusEl = document.getElementById('aiTestStatus');
+            var apiUrl = document.getElementById('aiApiUrl').value.trim();
+            var apiKey = document.getElementById('aiApiKey').value.trim();
+            var model = document.getElementById('aiModel').value.trim() || 'gpt-4o';
+            if (!apiUrl || !apiKey) {
+                statusEl.textContent = '请先填写 API 地址和密钥';
+                statusEl.className = 'settings-status error';
+                return;
+            }
+            statusEl.textContent = '正在测试…';
+            statusEl.className = 'settings-status';
+            // 地址容错：裸域名自动补 /v1，粘了完整端点也不会重复拼接
+            var url = NativeHttp.chatEndpoint(apiUrl);
+            var payload = { model: model, messages: [{ role: 'user', content: '你好' }], max_tokens: 64 };
+            NativeHttp.postJson(url, { Authorization: 'Bearer ' + apiKey }, payload).then(function(data) {
+                var choice = data.choices && data.choices[0];
+                if (choice) {
+                    var msg = choice.message || {};
+                    var text = msg.content || msg.reasoning_content || '';
+                    statusEl.textContent = '连接成功！' + (text ? '模型回复：' + text.substring(0, 60) : '（模型已响应）');
+                    statusEl.className = 'settings-status success';
+                } else {
+                    statusEl.textContent = '连上了，但返回成空。多半是模型名不对：' + model + '（实际请求 ' + url + '）';
+                    statusEl.className = 'settings-status success';
+                }
+            }, function(e) {
+                statusEl.textContent = NativeHttp.explainError(e, url);
+                statusEl.className = 'settings-status error';
+            });
         }
 
                         var PROMPT_DEFAULTS = [
@@ -3603,27 +3986,18 @@ function shareNote(encodedContent) {
             if (typeof AndroidStorage !== 'undefined') {
                 window.location.href = 'memory/memory.html';
             } else {
-                window.location.href = 'memory/memory.html';
+                window.location.href = 'app/src/main/assets/memory/memory.html';
             }
         }
 
         function manualTriggerDreaming() {
             if (typeof runDreaming === 'function') {
-                showToast('开始整理记忆...');
+                showToast('开始写回忆信...');
                 runDreaming();
                 setTimeout(loadMemorySettings, 1000);
             } else {
                 showToast('记忆系统不可用');
             }
-        }
-
-        function sendDreamingMail(hasChanges) {
-            if (typeof sendProactiveMailSkill === 'undefined') return;
-            var subject = hasChanges ? '记忆整理完成' : '记忆已检查';
-            var message = hasChanges
-                ? '我刚刚整理了一下你的记忆碎片，去除了重复和琐碎的内容，把相关的事实归并到了一起。现在你的记忆更清晰了。'
-                : '我检查了一下你的记忆，目前没有什么需要整理的，一切都很清楚。';
-            try { sendProactiveMailSkill.execute({ subject: subject, message: message }); } catch(e) {}
         }
 
         // ─── 导入 flomo HTML ───
@@ -3683,72 +4057,11 @@ function shareNote(encodedContent) {
             reader.readAsText(file);
         }
 
-        // ─── 导出笔记 ───
-        window.exportNotes = function(format) {
-            var allNotes = DataService.notes.load() || [];
-            if (allNotes.length === 0) {
-                var statusEl = document.getElementById('exportStatus');
-                if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted)">没有笔记可导出</span>';
-                return;
-            }
-
-            var statusEl = document.getElementById('exportStatus');
-            var text, filename, mime;
-
-            if (format === 'md') {
-                text = '# 念念笔记导出\n\n> 导出时间: ' + new Date().toISOString().substring(0, 10) + '\n> 共 ' + allNotes.length + ' 条笔记\n\n---\n\n';
-                for (var i = 0; i < allNotes.length; i++) {
-                    var n = allNotes[i];
-                    var date = (n.createdAt || '').substring(0, 10);
-                    var plain = (n.content || '').replace(/--isHTML /, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
-                    text += '### ' + date + '\n\n' + plain + '\n\n---\n\n';
-                }
-                filename = 'nian_notes_' + new Date().toISOString().substring(0, 10) + '.md';
-                mime = 'text/markdown';
-            } else if (format === 'json') {
-                var clean = allNotes.map(function(n) {
-                    return { id: n.id, content: (n.content || '').replace(/--isHTML /, ''), createdAt: n.createdAt };
-                });
-                text = JSON.stringify(clean, null, 2);
-                filename = 'nian_notes_' + new Date().toISOString().substring(0, 10) + '.json';
-                mime = 'application/json';
-            } else if (format === 'html') {
-                text = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head><meta charset="UTF-8"><title>念念笔记导出</title>\n';
-                text += '<style>body{max-width:720px;margin:0 auto;padding:20px;font-family:"Noto Serif SC",serif;background:#f5f0e6;color:#2a2418;line-height:1.8}' +
-                    '.note{border-bottom:1px solid #ddd;padding:20px 0}' +
-                    '.note-date{font-size:12px;color:#968d7e;margin-bottom:8px}' +
-                    '.note-content{font-size:15px}</style>\n';
-                text += '</head>\n<body>\n<h1>念念笔记导出</h1>\n<p>' + new Date().toISOString().substring(0, 10) + ' · 共 ' + allNotes.length + ' 条</p>\n<hr>\n';
-                for (var j = 0; j < allNotes.length; j++) {
-                    var nn = allNotes[j];
-                    var d = (nn.createdAt || '').substring(0, 10);
-                    var htmlContent = (nn.content || '').replace(/--isHTML /, '');
-                    text += '<div class="note"><div class="note-date">' + escapeHtml(d) + '</div><div class="note-content">' + htmlContent + '</div></div>\n';
-                }
-                text += '\n</body>\n</html>';
-                filename = 'nian_notes_' + new Date().toISOString().substring(0, 10) + '.html';
-                mime = 'text/html';
-            }
-
-            var blob = new Blob([text], { type: mime + ';charset=utf-8' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            if (statusEl) statusEl.innerHTML = '<span style="color:#34a853">已导出</span>: ' + filename + ' (' + allNotes.length + ' 条笔记)';
-        };
-
-
         function openMemory() {
             if (typeof AndroidStorage !== 'undefined') {
                 window.location.href = 'memory/memory.html';
             } else {
-                window.location.href = 'memory/memory.html';
+                window.location.href = 'app/src/main/assets/memory/memory.html';
             }
         }
 
@@ -3766,10 +4079,11 @@ function shareNote(encodedContent) {
         window.showAllScenarios = showAllScenarios;
         window.selectInsightScenario = selectInsightScenario;
         window.executeInsight = executeInsight;
-        window.closeInsightHub = closeInsightHub;
         window.goBackInsightStep = goBackInsightStep;
         window.openInsightSheet = function(noteId) { openInsightPicker(true, noteId); };
         window.closeInsightSheet = closeInsightPicker;
+        window.openImageGenSheet = openImageGenSheet;
+        window.closeImageGenSheet = closeImageGenSheet;
         window.toggleHistoryPanel = toggleHistoryPanel;
         window.closeHistoryPanel = closeHistoryPanel;
         window.newConversation = newConversation;
@@ -3778,5 +4092,17 @@ function shareNote(encodedContent) {
         window.openMemory = openMemory;
         window.switchToConversation = switchToConversation;
         window.renderNianMessages = renderNianMessages;
+        window.runDreaming = runDreaming;
+
+        // 切换对话时重置 agent 上下文（防止跨对话历史泄漏导致上下文爆满）。
+        // summary 为该对话的历史摘要（可能为空），随上下文一起恢复。
+        window.resetAgentContext = function(msgs, summary) {
+            if (nianAgent) {
+                nianAgent.reset();
+                if (msgs && msgs.length) {
+                    nianAgent.setHistory(msgs, summary);
+                }
+            }
+        };
 
 

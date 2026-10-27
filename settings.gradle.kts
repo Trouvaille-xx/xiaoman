@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NianNote"
+rootProject.name = "xiaoman"
 include(":app")

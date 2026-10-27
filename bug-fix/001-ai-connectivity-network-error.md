@@ -2,13 +2,13 @@
 
 **日期**: 2026-06-13  
 **严重程度**: P0（聊天核心功能完全不可用）  
-**影响范围**: 念念 Android App 云端版本（所有用户）
+**影响范围**: 小满 Android App 云端版本（所有用户）
 
 ---
 
 ## 现象
 
-念念对话页面发送消息后，显示：
+小满对话页面发送消息后，显示：
 - `[XHR] Network error` 或 `连接 AI 失败: Network error，请检查 API 地址和密钥设置`
 - `API 未配置`
 - `Cleartext HTTP traffic to 115.159.116.240 not permitted`

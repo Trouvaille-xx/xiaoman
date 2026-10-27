@@ -138,15 +138,10 @@ html, body {
     width: 30px; height: 30px; background: none; border: none;
     cursor: pointer; color: var(--text-muted);
     display: flex; align-items: center; justify-content: center;
-    border-radius: 8px; font-size: 13px; font-weight: 500;
-    font-family: 'Noto Sans SC', sans-serif;
+    border-radius: 8px;
 }
 .notebook-edit-btn:active { color: var(--accent); background: var(--accent-light); }
 .notebook-edit-btn svg { width: 16px; height: 16px; stroke-width: 1.5; }
-.notebook-edit-btn.saving {
-    width: auto; padding: 0 12px;
-    color: var(--accent); background: var(--accent-light);
-}
 
 .notebook-paper {
     flex: 1; min-height: 200px;
@@ -173,68 +168,99 @@ html, body {
     font-size: 14px; line-height: 1.95; color: var(--text);
     position: relative; z-index: 1;
 }
-.notebook-textarea.editing { display: block; }
-.notebook-content.editing { display: none; }
+.notebook-textarea.active { display: block; }
+.notebook-content.hidden { display: none; }
 
-/* ── Corkboard (事实) ── */
-.corkboard {
-    min-height: 400px;
-    background: radial-gradient(circle at 20% 30%, rgba(168,90,42,0.03) 0%, transparent 50%),
-                radial-gradient(circle at 80% 70%, rgba(107,122,79,0.03) 0%, transparent 50%);
-    padding: 12px 4px 16px; position: relative;
-}
-.corkboard-facts {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 16px 12px; padding: 8px 0;
-}
-
-.fact-sticker {
+/* ── 回忆空间：心情概览 ── */
+.mood-strip {
     background: var(--card); border: 1px solid var(--border);
-    border-radius: 2px; padding: 14px 12px 10px;
-    position: relative;
-    box-shadow: 0 2px 8px rgba(60,40,20,0.08), 0 1px 2px rgba(60,40,20,0.04);
-    transition: all 0.3s var(--ease);
-    animation: stickerIn 500ms var(--ease) both;
+    border-radius: var(--radius); padding: 14px 16px 12px; margin-bottom: 16px;
 }
-.fact-sticker:nth-child(odd) { transform: rotate(-0.5deg); }
-.fact-sticker:nth-child(even) { transform: rotate(0.5deg); }
-.fact-sticker:nth-child(3n) { transform: rotate(1deg); }
-.fact-sticker:nth-child(4n) { transform: rotate(-0.8deg); }
+.mood-strip-title {
+    font-size: 12px; color: var(--text-muted); margin-bottom: 10px;
+    font-family: 'Noto Sans SC', sans-serif; letter-spacing: 0.05em;
+}
+.mood-strip-days { display: flex; justify-content: space-between; }
+.mood-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    width: 13%;
+}
+.mood-cell-emoji { font-size: 20px; line-height: 1; }
+.mood-cell-empty .mood-cell-emoji { color: var(--ink-faint); font-size: 16px; }
+.mood-cell-label { font-size: 9px; color: var(--text-muted); }
 
+/* ── 回忆空间：时间线 ── */
+.timeline { position: relative; padding-left: 14px; }
+.timeline::before {
+    content: ""; position: absolute; left: 3px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--border); border-radius: 1px;
+}
+.timeline-day { position: relative; margin-bottom: 4px; }
+.timeline-day::before {
+    content: ""; position: absolute; left: -14px; top: 18px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent-glow);
+}
+.timeline-day-label {
+    font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+    font-size: 15px; color: var(--text-secondary);
+    padding: 8px 0 10px; letter-spacing: 2px;
+}
 @keyframes stickerIn {
     from { opacity: 0; transform: scale(0.92) translateY(6px); }
     to { opacity: 1; }
 }
-
-/* Pushpin */
-.fact-sticker::before {
-    content: ""; position: absolute;
-    top: -4px; left: 50%; transform: translateX(-50%);
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 1px 2px rgba(60,40,20,0.2), inset 0 1px 0 rgba(255,255,255,0.3);
-    z-index: 2;
+.moment-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+    animation: stickerIn 450ms var(--ease) both;
+}
+.moment-head { display: flex; align-items: flex-start; gap: 10px; }
+.moment-emoji { font-size: 22px; line-height: 1.2; }
+.moment-head-text { flex: 1; min-width: 0; }
+.moment-title {
+    font-family: 'Noto Serif SC', serif; font-size: 14px; font-weight: 600;
+    color: var(--text); line-height: 1.4;
+}
+.moment-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.moment-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.moment-actions span { font-size: 11px; color: var(--text-muted); cursor: pointer; }
+.moment-actions span:active { color: var(--accent); }
+.moment-actions .danger { color: #c0392b; }
+.moment-excerpt {
+    margin-top: 8px; font-size: 13px; color: var(--text-secondary);
+    line-height: 1.6; font-family: 'Noto Serif SC', serif;
+}
+.moment-reply {
+    margin-top: 10px; background: var(--accent-light);
+    border-radius: 10px; padding: 8px 12px;
+    font-size: 12.5px; color: var(--text); line-height: 1.6;
+}
+.moment-reply-tag {
+    display: inline-block; background: var(--accent); color: #fff;
+    font-size: 10px; border-radius: 8px; padding: 1px 7px; margin-right: 6px;
 }
 
-.fact-sticker-category {
-    display: inline-block;
-    font-family: 'Noto Sans SC', sans-serif;
-    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
-    color: var(--accent); background: var(--accent-light);
-    padding: 2px 8px; border-radius: 10px; margin-bottom: 8px;
+/* ── 时刻编辑器 ── */
+.moment-editor-card { width: 320px; }
+.moment-input, .moment-textarea {
+    width: 100%; border: 1px solid var(--border); border-radius: 10px;
+    outline: none; font-family: 'Noto Serif SC', serif; font-size: 13px;
+    color: var(--text); background: var(--bg); padding: 9px 12px;
+    margin-bottom: 10px;
 }
-.fact-sticker-content {
-    font-family: 'Noto Serif SC', serif; font-size: 13px;
-    color: var(--text); line-height: 1.5;
+.moment-textarea { resize: none; line-height: 1.5; }
+.moment-input:focus, .moment-textarea:focus { border-color: var(--accent); }
+.moment-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.moment-row-label { font-size: 12px; color: var(--text-muted); }
+.moment-select {
+    flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; color: var(--text); background: var(--bg);
+    font-family: 'Noto Sans SC', sans-serif; outline: none;
 }
-.fact-sticker-actions {
-    display: flex; gap: 10px; margin-top: 8px; justify-content: flex-end;
-}
-.fact-sticker-actions span {
-    font-size: 11px; color: var(--text-muted); cursor: pointer;
-}
-.fact-sticker-actions span:active { color: var(--accent); }
-.fact-sticker-actions .danger { color: #c0392b; }
+.moment-reply-input { background: var(--card); }
 
 .fact-add-btn {
     display: block; width: 100%; margin-top: 16px; padding: 12px;
@@ -245,22 +271,6 @@ html, body {
 }
 .fact-add-btn:active { border-color: var(--accent); color: var(--accent); }
 
-.fact-editor {
-    background: var(--card); border: 1px solid var(--accent);
-    border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;
-}
-.fact-editor-input {
-    width: 100%; min-height: 80px; border: none; outline: none;
-    resize: vertical; font-family: 'Noto Serif SC', serif; font-size: 14px;
-    line-height: 1.5; color: var(--text); background: transparent;
-    margin-bottom: 10px;
-}
-.fact-editor-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.fact-editor-select {
-    padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
-    font-size: 13px; color: var(--text); background: var(--bg);
-    font-family: 'Noto Sans SC', sans-serif; outline: none;
-}
 .fact-editor-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .fact-editor-btn {
     padding: 8px 18px; border: none; border-radius: 8px;
@@ -272,6 +282,11 @@ html, body {
 .empty-hint {
     text-align: center; padding: 60px 20px;
     font-size: 14px; color: var(--text-muted); line-height: 1.6;
+}
+/* 空状态里的小满形象图（memory.html 在 assets/memory/ 下，故用 ../mascot/） */
+.empty-mascot {
+    display: block; width: 132px; height: auto;
+    margin: 0 auto 18px; opacity: 0.92;
 }
 
 /* ── Dreaming Dialog ── */
@@ -326,172 +341,115 @@ html, body {
     transform: translateX(-50%) translateY(0);
 }
 
-/* ── 摘要 Tab ── */
-.summary-intro {
-    padding: 4px 4px 16px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 14px;
-}
-.summary-intro-title {
-    font-family: 'Ma Shan Zheng', 'KaiTi', serif;
-    font-size: 20px; color: var(--text); letter-spacing: 2px;
-}
-.summary-intro-desc {
-    font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.6;
-}
+/* ══════════ v5：角色档案 & 结构化用户记忆 ══════════ */
+.memory-header-center { gap: 14px; }
+.memory-header-center .memory-header-title { display: none; }
+.mem-head-tab { white-space: nowrap; }
 
-.summary-section { margin-bottom: 18px; }
-.summary-section-title {
-    font-family: 'Noto Serif SC', serif;
+.mem-user, .mem-role { display: flex; flex-direction: column; gap: 14px; }
+.mem-section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow-card);
+}
+.mem-section-head {
+    display: flex; justify-content: space-between; align-items: center;
     font-size: 13px; font-weight: 600; color: var(--text-secondary);
-    margin-bottom: 10px; padding-left: 8px;
-    border-left: 3px solid var(--accent);
+    margin-bottom: 10px; font-family: 'Noto Sans SC', sans-serif;
 }
-.summary-empty {
-    background: var(--card); border: 1px dashed var(--border);
-    border-radius: var(--radius-sm); padding: 18px 16px;
-    font-size: 12px; color: var(--text-muted);
-    font-style: italic; text-align: center;
+.mem-section-head small {
+    display: block; font-weight: 400; font-size: 10px;
+    color: var(--text-muted); margin-top: 2px;
 }
-
-.timeline-list { display: flex; flex-direction: column; gap: 6px; }
-.timeline-item {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 14px;
-    font-size: 13px; line-height: 1.6; color: var(--text);
-    font-family: 'Noto Serif SC', serif;
-}
-
-.theme-list {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-.theme-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; cursor: pointer;
-    transition: all 0.3s var(--ease);
-}
-.theme-card:active { border-color: var(--accent); }
-.theme-card-name {
-    font-family: 'Noto Serif SC', serif; font-size: 13px;
-    color: var(--accent); font-weight: 600; margin-bottom: 4px;
-}
-.theme-card-preview {
-    font-size: 11px; color: var(--text-muted); line-height: 1.5;
-    overflow: hidden; text-overflow: ellipsis;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-}
-
-.weekly-list { display: flex; flex-direction: column; gap: 6px; }
-.weekly-item {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 14px;
-    font-size: 13px; color: var(--text);
-    font-family: 'Noto Serif SC', serif;
-}
-
-.pending-section { border-top: 1px solid var(--border); padding-top: 14px; }
-.pending-list { display: flex; flex-direction: column; gap: 10px; }
-.pending-item {
-    background: var(--card); border: 1px solid var(--accent);
-    border-radius: 10px; padding: 12px 14px;
-}
-.pending-item-content {
-    font-family: 'Noto Serif SC', serif; font-size: 13px;
-    color: var(--text); line-height: 1.6; margin-bottom: 4px;
-}
-.pending-item-source {
-    font-size: 11px; color: var(--text-muted);
-    font-family: 'Noto Sans SC', sans-serif; margin-bottom: 8px;
-}
-.pending-item-actions { display: flex; gap: 8px; }
-.pending-btn {
-    flex: 1; padding: 8px 0; border-radius: 8px; border: none;
-    font-size: 13px; font-weight: 500; cursor: pointer;
+.mem-mini-btn {
+    border: 1px solid var(--border); background: none; color: var(--accent);
+    font-size: 11px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
     font-family: 'Noto Sans SC', sans-serif;
 }
-.pending-btn.approve { background: var(--accent); color: #fff; }
-.pending-btn.reject { background: var(--accent-light); color: var(--text); }
-.pending-btn:active { opacity: 0.8; }
+.mem-mini-btn:active { background: var(--accent-light); }
 
-/* ── MEMORY.md 表格视图 (在档案 Tab) ── */
-.notebook-md-view { font-size: 13px; line-height: 1.7; color: var(--text); position: relative; z-index: 1; }
-.md-h1 {
-    font-family: 'Ma Shan Zheng', 'KaiTi', serif; font-size: 18px;
-    color: var(--accent); margin: 6px 0 8px; letter-spacing: 1px;
+.tag-wall { display: flex; flex-wrap: wrap; gap: 7px; }
+.tag-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 10px; border-radius: 999px;
+    background: var(--accent-light); color: var(--text-secondary);
+    font-size: 12px; font-family: 'Noto Sans SC', sans-serif;
+    border: 1px solid transparent; cursor: pointer;
 }
-.md-h2 {
-    font-family: 'Noto Serif SC', serif; font-size: 14px;
-    color: var(--text); font-weight: 600; margin: 12px 0 6px;
-    border-bottom: 1px solid var(--border); padding-bottom: 4px;
-}
-.md-quote {
-    font-size: 12px; color: var(--text-muted);
-    font-style: italic; padding-left: 10px;
-    border-left: 2px solid var(--border); margin: 6px 0;
-}
-.md-table {
-    width: 100%; border-collapse: collapse;
-    font-size: 12px; margin: 8px 0;
-    font-family: 'Noto Sans SC', sans-serif;
-}
-.md-table th, .md-table td {
-    border: 1px solid var(--border); padding: 6px 8px;
-    text-align: left; vertical-align: top;
-}
-.md-table th {
-    background: var(--accent-light); color: var(--accent);
-    font-weight: 600; font-size: 11px;
-}
-.md-table td { word-break: break-word; }
+.tag-chip b { color: var(--text-muted); font-weight: 500; font-size: 10px; }
+.tag-chip.tag-semantic { background: rgba(124, 92, 191, 0.08); color: #5b4a8a; }
+.tag-chip.tag-date { background: rgba(201, 162, 39, 0.12); }
+.tag-chip.tag-goal { background: rgba(46, 125, 50, 0.08); color: #2e6b33; }
+.mem-empty-line { font-size: 12px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; line-height: 1.7; }
 
-/* ── Dreaming Progress Dialog ── */
-.dreaming-progress-card { max-width: 360px; width: 90%; }
+.pending-card {
+    border: 1px dashed rgba(201, 162, 39, 0.6);
+    background: rgba(201, 162, 39, 0.06);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+}
+.pending-q { font-size: 12px; line-height: 1.7; color: #7a5a1e; font-family: 'Noto Sans SC', sans-serif; }
+.pending-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pending-actions button {
+    border: 1px solid var(--border); background: var(--card);
+    border-radius: 999px; padding: 4px 9px; font-size: 11px;
+    color: var(--text-secondary); font-family: 'Noto Sans SC', sans-serif; cursor: pointer;
+}
+.pending-actions button:active { border-color: var(--accent); color: var(--accent); }
 
-.dreaming-progress-bar {
-    width: 100%; height: 6px;
-    background: var(--border);
-    border-radius: 3px;
-    margin: 16px 0;
-    overflow: hidden;
+.mem-filter { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.mem-filter::-webkit-scrollbar { display: none; }
+.mem-filter-chip {
+    flex-shrink: 0; border: 1px solid var(--border); background: var(--card);
+    border-radius: 999px; padding: 6px 12px; font-size: 12px;
+    color: var(--text-secondary); font-family: 'Noto Sans SC', sans-serif; cursor: pointer;
 }
-.dreaming-progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 3px;
-    transition: width 0.4s var(--ease);
-}
+.mem-filter-chip span { margin-left: 4px; font-size: 10px; color: var(--text-muted); }
+.mem-filter-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 
-.dreaming-stage-list {
-    display: flex; flex-direction: column; gap: 10px;
-    margin: 12px 0;
+.mem-card { border-top: 1px dashed var(--border); padding: 10px 0; }
+.mem-card:first-of-type { border-top: none; }
+.mem-card-inactive { opacity: 0.55; }
+.mem-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.mem-type-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-family: 'Noto Sans SC', sans-serif; }
+.mem-type-badge.ep { background: rgba(168, 90, 42, 0.12); color: var(--accent); }
+.mem-type-badge.fact { background: rgba(46, 125, 50, 0.10); color: #2e6b33; }
+.mem-type-badge.pref { background: rgba(201, 162, 39, 0.14); color: #8a6a10; }
+.mem-type-badge.sem { background: rgba(124, 92, 191, 0.12); color: #5b4a8a; }
+.mem-type-badge.sum { background: rgba(90, 120, 160, 0.12); color: #3f5f82; }
+.mem-card-date { font-size: 10px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; }
+.mem-card-status { margin-left: auto; font-size: 10px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; }
+.mem-card-status.inactive { color: #b45309; }
+.mem-card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.mem-card-body { font-size: 12.5px; line-height: 1.7; color: var(--text-secondary); font-family: 'Noto Sans SC', sans-serif; white-space: pre-wrap; }
+.mem-card-meta { margin-top: 4px; font-size: 10.5px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; }
+.mem-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.mem-tags span {
+    font-size: 10.5px; color: var(--accent); background: var(--accent-light);
+    padding: 2px 7px; border-radius: 999px; font-family: 'Noto Sans SC', sans-serif;
 }
-.dreaming-stage {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 14px; color: var(--text-muted);
-    transition: color 0.3s var(--ease);
-}
-.dreaming-stage.active { color: var(--text); }
-.dreaming-stage.done { color: var(--accent); }
-.dreaming-stage-icon {
-    width: 22px; text-align: center;
-    font-size: 16px; flex-shrink: 0;
-}
-.dreaming-stage.done .dreaming-stage-icon { color: var(--accent); }
-.dreaming-stage.active .dreaming-stage-icon {
-    color: var(--accent);
-    animation: dreamingPulse 1s ease-in-out infinite;
-}
+.mem-card-actions { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; }
+.mem-card-actions span { cursor: pointer; }
+.mem-card-actions span.danger { color: #b45309; }
 
-.dreaming-progress-log {
-    font-size: 12px; color: var(--text-muted);
-    margin-top: 8px; padding-top: 10px;
-    border-top: 1px solid var(--border);
-    max-height: 80px; overflow-y: auto;
-    line-height: 1.6;
-}
+.mem-edit-card { width: calc(100vw - 32px); max-width: 420px; max-height: 82vh; overflow-y: auto; }
+.mem-form { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 14px; }
+.mem-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; }
+.mem-field .moment-input, .mem-field .moment-textarea { width: 100%; }
+.mem-field .moment-textarea { resize: vertical; }
 
-@keyframes dreamingPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+.role-hero {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow-card);
+}
+.role-hero img { width: 64px; height: 64px; object-fit: contain; }
+.role-hero-name { font-size: 20px; font-weight: 600; color: var(--text); }
+.role-hero-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; font-family: 'Noto Sans SC', sans-serif; }
+.role-tip { font-size: 11px; color: var(--text-muted); font-family: 'Noto Sans SC', sans-serif; line-height: 1.6; padding: 0 4px; }
+.role-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow-card); }
+.role-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.role-card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.role-card-desc { font-size: 10.5px; color: var(--text-muted); margin-top: 3px; font-family: 'Noto Sans SC', sans-serif; }
+.role-card-body {
+    margin-top: 10px; font-size: 12.5px; line-height: 1.8; color: var(--text-secondary);
+    white-space: pre-wrap; border-top: 1px dashed var(--border); padding-top: 10px;
 }

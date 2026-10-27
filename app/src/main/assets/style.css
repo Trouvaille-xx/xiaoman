@@ -477,7 +477,6 @@
 
         .note-card-wrapper {
             position: relative;
-            min-width: 150px;
         }
 
         .note-card-wrapper:first-child {
@@ -564,7 +563,7 @@
             box-shadow: 0 8px 32px rgba(0,0,0,0.12);
             z-index: 100;
             display: none;
-            min-width: 150px;
+            min-width: 180px;
             overflow: hidden;
         }
 
@@ -931,7 +930,8 @@
         }
 
         .nian-chat-input-container {
-            padding: 12px 16px 14px;
+            padding: 12px 16px;
+            padding-bottom: calc(12px + var(--safe-area-bottom) + 2px);
             background: var(--bg);
             border-top: 1px solid var(--border);
         }

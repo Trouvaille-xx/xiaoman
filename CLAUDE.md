@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-念念 (NianNote) Android 原生应用 — Kotlin WebView 混合架构，WebView 加载本地 HTML/JS 资源，原生层提供存储、图片管理和系统能力。
+小满 (xiaoman) Android 原生应用 — Kotlin WebView 混合架构，WebView 加载本地 HTML/JS 资源，原生层提供存储、图片管理和系统能力。
 
 ## 命令
 
 ```bash
 ./gradlew assembleDebug      # Debug 构建
 ./gradlew assembleRelease    # Release 构建
+node hotupdate/push.js       # 热更新打包发布（改完 JS/HTML/CSS 后执行）
+node hotupdate/server.js     # 热更新 LAN 服务（默认 8788，手机从这里拉取）
 # 或用 Android Studio 打开此目录
 ```
 
@@ -30,7 +32,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 JS 渲染层 (WebView 内 HTML/JS)
-  ↕ 8 个 JavascriptInterface Bridge
+  ↕ 9 个 JavascriptInterface Bridge
 Kotlin Bridge 层 (MainActivity.kt 内部类)
   ↕ Room DAO / ImageFileManager / HttpURLConnection
 存储层: Room DB (文本) + 文件系统 (图片) + SharedPreferences (设置/信箱/记忆)
@@ -40,7 +42,7 @@ Kotlin Bridge 层 (MainActivity.kt 内部类)
 
 ```
 app/src/main/java/com/niannote/app/
-├── MainActivity.kt         # Activity + 8个 JS Bridge 接口 (内部类)
+├── MainActivity.kt         # Activity + 9个 JS Bridge 接口 (内部类)
 ├── MailWorker.kt           # AI 笔友后台回信 (OpenAI 兼容 API)
 └── data/
     ├── Entities.kt         # Room 实体: NoteEntity, ImageEntity
@@ -50,14 +52,19 @@ app/src/main/java/com/niannote/app/
 
 app/src/main/assets/
 ├── app.html                # WebView 入口
+├── native-http.js          # 统一网络通道 (原生异步桥/XHR) + API 端点归一化 + 报错翻译
+├── hotupdate.js            # 热更新客户端 (差量检查/下载/原子应用)
+├── memory-service.js       # 记忆系统统一读写入口 (含 prompt 构建/长度上限/迁移)
 ├── style.css               # 全局样式
 ├── app.js                  # 主逻辑
+├── agent.js                # 小满智能体核心 (token 预算上下文)
+├── mascot/                 # 小满形象图（聊天头像 / 空状态，透明底 PNG）
 ├── insight/                # 洞察页面
 ├── memory/                 # 记忆管理系统 (memory.html/css/js)
 └── mail/                   # 信箱页面
 ```
 
-### 8 个 JavaScript Bridge 接口
+### 9 个 JavaScript Bridge 接口
 
 | Bridge | JS 名称 | 存储 | 核心方法 |
 |--------|---------|------|----------|
@@ -68,7 +75,8 @@ app/src/main/assets/
 | MemoryInterface | `AndroidMemory` | SharedPreferences `nian_memories` | `loadAll`, `saveAll` (v2 格式: soul/user/facts) |
 | FileInterface | `AndroidFile` | 文件系统 + Room images 表 | `saveImageFromBase64`, `getImageBase64`, `deleteImage`, `deleteImagesForNote` |
 | ImageInterface | `AndroidImage` | 文件系统 + Room images 表 | `saveImagesSync` (批量), `getImageData`, `ping`, `getFileProviderAuthority` |
-| HttpInterface | `AndroidHttp` | — | `get(url)` → 原生 HTTP GET (绕过 WebView CORS) |
+| HttpInterface | `AndroidHttp` | — | `getAsync`/`postAsync` (异步回调 `__onNativeHttpResponse`), `get`/`post` (同步) — 仅允许 http/https |
+| UpdateInterface | `AndroidUpdate` | filesDir/hotfix_staging → hotfix；cacheDir/apk | `beginApply`, `saveHotfixFile(path,text)`, `commitApply(version,manifest)`, `getLocalInfo`, `resetUpdate`, `getAppVersion`, `downloadAndInstallApk(url,callbackId)` (下载 APK → FileProvider 拉起安装器 → 回调 `window.Update.__onApkResult`) |
 
 ### 数据流
 
@@ -94,19 +102,41 @@ app/src/main/assets/
 - **清理**: 删除笔记时联动删除关联图片文件和 DB 记录
 - **FileProvider**: `com.niannote.app.fileprovider`，路径配置在 `res/xml/file_paths.xml`
 
-### 记忆系统 (L0-L3)
+### 记忆系统 (v5：角色档案 + 用户记忆)
 
-四层分层架构，数据存 SharedPreferences `nian_memories` (JSON, v2 格式):
-- **L0 会话记忆**: 内存中 nianMessages[] 数组 (最多 20 条)
-- **L1 摘要记忆**: 定时生成 (待实现)
-- **L2 事实记忆**: 结构化事实卡片 (8 分类: 身份/偏好/关系/目标/情绪/信念/健康/事件)
-- **L3 档案记忆**: 可编辑 Markdown 文件 (soul.md / user.md / facts.md), 通过 `memory/memory.html` 管理
+数据存 SharedPreferences `nian_memories` (JSON v5)，由 `memory-service.js` 统一读写；`memory-engine.js` 负责每轮对话后的 LLM 提取与冲突判断：
+- **角色档案 `role`**: identity / personality / tone / knowledge / background / boundaries，决定小满是谁；`memory/memory.html` 的「角色档案」页可编辑
+- **核心画像 `profile`**: name / gender / age / occupation / city / emotionalStatus / relationshipStatus / keyDates / longTermGoals，在「用户记忆」页用标签墙展示
+- **事实记忆 `facts`**: category / key / value / confidence / status / tags / evidence
+- **偏好记忆 `preferences`**: key / value / polarity(like|dislike) / tags / context
+- **情节记忆 `episodes`**: title / summary / occurredAt / emotion / intensity / context / people / tags（时序日志，替代旧 moments）
+- **语义记忆 `semantic`**: 沉淀的理解与画像结论 + 标签
+- **摘要记忆 `summaries`**: 每 8 轮对话由 `MemoryEngine.makeSummary` 生成
+- **待确认 `pending`**: 冲突时生成确认问题；用户在对话里回复后，提取引擎输出 resolutions 处理（accept_new / keep_old / keep_both_by_context / reject_both）
 
-念念对话的记忆注入: `buildNianSystemPrompt()` → soul.md 做主 prompt + user.md + facts.md 追加 + nianMessages[] 历史上下文
+对话注入：`buildNianSystemPrompt(query)` → `MemoryService.buildSystemPrompt(mem, tools, query)`；每轮回复后 `silentExtractFromChat` 串行调用 `MemoryEngine.processTurn` 写入。旧 `files/moments` 保留兼容，但不再作为主注入源。
+- **persona**: 品牌标记。旧数据（无该字段）在 `migrate()` 里一次性把自称 念念 改成 小满——
+  只替换人设文件里的自称短语（`「念念」`/`你是念念`/`念念性格`），用户自己写的
+  user / memory / heartbeat、时刻、事实一律不碰；人设仍是旧默认值时整段换成新默认（含「小得盈满」意涵与非催促语气）
+
+小满对话的记忆注入: `MemoryService.buildSystemPrompt()` → 各文件段带上限注入 + facts 卡片注入 + nianMessages[] 历史上下文（agent 端按 token 预算裁剪）
+
+### 热更新系统
+
+JS/HTML/CSS 改动免安装热推送；Kotlin/Manifest/res 改动需要装新 APK —— 但 APK 也是**构建即发布 + 应用内自更新**，不需要手动拷包。
+
+- **入口**: MainActivity 经 WebViewAssetLoader 从 `https://appassets.androidplatform.net/assets/app.html` 加载（不再用 file:///android_asset）。`HotfixAssetHandler` 注册在 `/assets/` 前缀：优先返回 `filesDir/hotfix/` 下文件，缺失回退 APK assets
+- **推送端(电脑)**: `node hotupdate/push.js` 把 assets 打包到 `hotupdate/published/` 并生成 manifest.json（每文件 sha1+size，version=时间戳+内容哈希）；`node hotupdate/server.js [port]`（默认 8788）提供 `GET /manifest.json`、`GET /files/<path>`、`GET /apk.json`、`GET /apk`
+- **常驻**: 计划任务 `xiaoman-HotUpdate`（登录自启）→ `hotupdate/start-hidden.vbs` 静默拉起 server.js + `watch.js`；watch.js 监视 assets 目录，内容变了自动 push（无命令、无手动步骤）
+- **接收端(手机)**: 设置 → AI 设置 → 热更新服务器 填 LAN 地址（保存后每次启动自动静默检查，也可手动「检查并应用更新」）。流程：拉清单 → 本地 manifest hash 比对出差量 → 逐文件下载写入暂存区 `hotfix_staging` → `commitApply` 原子切换为 `hotfix` → `location.reload()`
+- **APK 自更新**: `versionCode` 由 `app/build.gradle.kts` 按构建时间生成（2020-01-01 起分钟数，单调递增），`assembleDebug` 结束后 `syncDebugApkToHotupdate` 自动把 APK 复制到 `hotupdate/apk/` 并写 `apk-info.json`。手机端 `hotupdate.js` 的 `checkApk()` 先拉 `/apk.json`（几十字节）比 versionCode，有新版才 `installApk()` → 原生 `downloadAndInstallApk(url,id)` 下载到 `cacheDir/apk/` → FileProvider + `ACTION_VIEW` 拉起系统安装器（用户点一次「安装」）。启动时静默检查一次，同一版本只提示一次（settings `apkPromptedCode`）；设置页有「检查 App 更新」按钮
+- **防护**: `isSafePath` 防路径穿越；下载按 UTF-8 字节数校验完整性；暂存区整体切换防半更新状态；服务器拒绝 `..` 路径；APK 下载仅允许 http/https 且体积过小视为失败
+- **明文 HTTP**: Manifest `usesCleartextTraffic="true"`（LAN 推送与本地大模型 API 需要）
 
 ## AndroidManifest 关键配置
 
-- **权限**: `INTERNET`, `READ_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`
+- **权限**: `INTERNET` + `REQUEST_INSTALL_PACKAGES`（应用内自更新拉起安装器；首次需在系统设置里允许本应用安装未知应用。图片选择走 `ACTION_GET_CONTENT`，无需存储权限）
+- **导航安全**: WebView 内点击 http/https 链接一律转系统浏览器打开（`shouldOverrideUrlLoading`），防止远程页面访问 JS Bridge
 - **软键盘**: `windowSoftInputMode="adjustNothing"` — 键盘避让完全由 JS 通过 `window.__applySafeInsets(top, bottom, keyboard)` 自行处理
 - **配置变更**: `configChanges="orientation|screenSize|screenLayout|keyboardHidden"` — 旋转/键盘变化不重建 Activity
 - **返回键**: `onBackPressed` 优先 WebView `goBack()`，无可回退时退出 Activity

@@ -64,6 +64,208 @@ html, body {
 }
 .mail-mark-read-btn:active { background: var(--accent-light); }
 
+/* ── 视图切换 Tab ── */
+.mail-view-tabs {
+    display: flex; gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px;
+}
+.mail-view-tab {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 13px; color: var(--text-secondary);
+    padding: 5px 12px; border-radius: 16px;
+    cursor: pointer; transition: all 0.2s var(--ease);
+}
+.mail-view-tab.active { background: var(--accent); color: #fff; }
+
+/* ── 笔友列表首页 ── */
+.penpal-wall {
+    flex: 1; overflow-y: auto;
+    padding: 8px 16px calc(var(--safe-area-bottom) + 16px);
+}
+.penpal-wall::-webkit-scrollbar { display: none; }
+.penpal-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px;
+    display: flex; gap: 14px; align-items: flex-start;
+    cursor: pointer; margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+    position: relative; overflow: hidden;
+    transition: all 0.2s var(--ease);
+}
+.penpal-card:active { transform: scale(0.98); border-color: var(--accent); }
+.penpal-card.unread { border-color: var(--accent); }
+.penpal-card-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+    font-size: 24px; flex-shrink: 0;
+}
+.penpal-card-info { flex: 1; min-width: 0; }
+.penpal-card-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 4px;
+}
+.penpal-card-name {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 16px; font-weight: 600; color: var(--text);
+}
+.penpal-card-badge {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 10px; font-weight: 700; color: #fff;
+    background: var(--accent); border-radius: 10px;
+    padding: 2px 8px;
+}
+.penpal-card-personality {
+    font-size: 12px; color: var(--text-secondary);
+    font-family: 'Noto Serif SC', serif; margin-bottom: 4px;
+}
+.penpal-card-preview {
+    font-size: 12px; color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: 'Noto Serif SC', serif;
+}
+.penpal-card-arrow {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%);
+    width: 20px; height: 20px; color: var(--text-muted);
+    opacity: 0.5;
+}
+.penpal-empty {
+    text-align: center; padding: 80px 20px;
+    font-size: 14px; color: var(--text-muted); line-height: 1.6;
+}
+
+/* ── 对话流视图 ── */
+.thread-overlay {
+    position: absolute; inset: 0;
+    background: rgba(42,36,24,0.5); z-index: 100;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s var(--ease);
+}
+.thread-overlay.open { opacity: 1; pointer-events: auto; }
+
+.thread-view {
+    position: absolute; inset: 0;
+    background: var(--bg); z-index: 150;
+    display: none; flex-direction: column;
+}
+.thread-view.open { display: flex; }
+
+.thread-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(var(--safe-area-top) + 8px) 16px 8px;
+    background: var(--bg); flex-shrink: 0;
+}
+.thread-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 16px; font-weight: 600; color: var(--text);
+}
+
+.thread-body {
+    flex: 1; overflow-y: auto;
+    padding: 8px 16px;
+}
+.thread-body::-webkit-scrollbar { display: none; }
+
+/* 笔友档案卡 */
+.thread-profile {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    position: relative;
+}
+.thread-profile-top {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 10px;
+}
+.thread-profile-avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Ma Shan Zheng', 'KaiTi', serif;
+    font-size: 22px; flex-shrink: 0;
+}
+.thread-profile-name {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 17px; font-weight: 600; color: var(--text);
+}
+.thread-profile-personality { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.thread-profile-story {
+    font-size: 12px; color: var(--text-secondary); line-height: 1.7;
+    font-family: 'Noto Serif SC', serif;
+}
+.thread-profile-interests {
+    margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px;
+}
+.thread-profile-tag {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 11px; color: var(--accent);
+    background: var(--accent-light);
+    padding: 3px 10px; border-radius: 12px;
+}
+.thread-profile-signature {
+    margin-top: 10px; font-size: 12px;
+    color: var(--text-muted); font-style: italic;
+    font-family: 'Noto Serif SC', serif;
+}
+
+/* 对话消息 */
+.thread-msg-group { margin-bottom: 18px; }
+.thread-msg-user {
+    font-size: 13px; color: var(--text-secondary);
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 12px;
+    margin-bottom: 8px; line-height: 1.6;
+    white-space: pre-wrap; word-wrap: break-word;
+    font-family: 'Noto Serif SC', serif;
+}
+.thread-msg-user-label {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 10px; color: var(--text-muted); margin-bottom: 4px;
+}
+.thread-msg-reply {
+    background: var(--card);
+    border: 1px solid var(--border); border-left-width: 4px;
+    border-radius: 12px; padding: 12px 14px;
+    line-height: 1.8;
+    font-family: 'Noto Serif SC', serif; font-size: 14px; color: var(--text);
+    white-space: pre-wrap; word-wrap: break-word;
+}
+.thread-msg-reply-footer {
+    margin-top: 8px; font-size: 11px; color: var(--text-muted);
+    text-align: right; font-family: 'Noto Sans SC', sans-serif;
+}
+.thread-msg-sending {
+    font-size: 12px; color: var(--text-muted); padding: 8px 4px;
+}
+.thread-day-divider {
+    text-align: center; font-size: 11px; color: var(--text-muted);
+    margin: 16px 0 12px; font-family: 'Noto Sans SC', sans-serif;
+}
+
+/* 对话流底部写信框 */
+.thread-compose {
+    flex-shrink: 0;
+    padding: 10px 16px calc(var(--safe-area-bottom) + 12px);
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+}
+.thread-compose-input {
+    width: 100%; min-height: 80px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 12px; font-size: 14px; font-family: 'Noto Serif SC', serif;
+    line-height: 1.6; color: var(--text);
+    background: var(--card); resize: vertical; outline: none;
+    box-sizing: border-box;
+}
+.thread-compose-input:focus { border-color: var(--accent); }
+.thread-compose-input::placeholder { color: var(--ink-faint); }
+.thread-compose-actions {
+    display: flex; justify-content: flex-end; margin-top: 8px;
+}
+
 /* ── Penpal Filter Chips ── */
 .penpal-filter {
     display: flex; gap: 8px;
@@ -186,6 +388,11 @@ html, body {
     text-align: center; padding: 80px 20px;
     font-size: 14px; color: var(--text-muted); line-height: 1.6;
 }
+/* 空信箱里的小满形象图（mail.html 在 assets/mail/ 下，故用 ../mascot/） */
+.empty-mascot {
+    display: block; width: 132px; height: auto;
+    margin: 0 auto 18px; opacity: 0.92;
+}
 
 /* ── Letter Detail ── */
 .letter-detail-overlay {
@@ -249,7 +456,7 @@ html, body {
     display: none; flex-shrink: 0;
     padding: 12px 16px; border-top: 1px solid var(--border);
     background: var(--bg);
-    padding-bottom: 12px;
+    padding-bottom: calc(var(--safe-area-bottom) + 12px);
 }
 .reply-compose.open { display: block; }
 .reply-compose-input {

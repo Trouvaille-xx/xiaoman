@@ -1,5 +1,5 @@
 // ─── send_proactive_mail Skill ───
-// 让念念能通过信箱主动给用户发消息
+// 让小满能通过信箱主动给用户发消息
 (function() {
   window.sendProactiveMailSkill = {
     definition: {
@@ -37,7 +37,7 @@
         id: "mail_" + Date.now(),
         noteContent: args.subject + "\n\n" + args.message,
         penpalId: penpalId,
-        penpalName: "念念",
+        penpalName: "小满",
         sentAt: Date.now().toString(),
         status: "replied",
         reply: args.message,
@@ -46,18 +46,17 @@
         isProactive: true
       };
 
-      // 写存储
+      // 写存储：Android 端走原生 upsertMail（落 nian_mails，未读角标可见）；
+      // 兼容旧数据：同时保留 settings.proactiveMails 供 mail.html 合并读取
       if (typeof AndroidMail !== "undefined") {
         try {
-          var raw = AndroidMail.loadMails();
-          var allMails = raw ? JSON.parse(raw) : [];
-          allMails.unshift(mail);
-          // 保存到 SharedPreferences 的 key 与 MailInterface 一致
-          // 但 AndroidMail 没有 saveMails 方法, 需要走 SharedPreferences
-          // 所以直接通过 nian_settings 存一份
+          if (typeof AndroidMail.upsertMail === "function") {
+            AndroidMail.upsertMail(JSON.stringify(mail));
+          }
           var s = DataService.settings.load() || {};
           var proactiveMails = s.proactiveMails || [];
           proactiveMails.unshift(mail);
+          if (proactiveMails.length > 200) proactiveMails = proactiveMails.slice(0, 200);
           s.proactiveMails = proactiveMails;
           DataService.settings.save(s);
         } catch(e) {

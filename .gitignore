@@ -8,6 +8,8 @@ app/build/
 *.class
 *.log
 build_output.log
+admin/logs.jsonl
+*.bak
 
 # ── Gradle home (misplaced) ──
 .gradle_home/

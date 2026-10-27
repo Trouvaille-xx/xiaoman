@@ -1,64 +1,26 @@
-// ─── update_archive Skill v2 ───
-//
-// v4 档案文件 (4 个):
-//   SOUL.md          — AI 永不可写 (用户专属)
-//   AGENT-RULES.md   — AI 永不可写 (用户专属)
-//   USER.md          — AI 只能 propose, 由用户终审
-//   MEMORY.md        — 只读视图, AI 不直接改 (通过 facts[] 改写)
-//
-// operation:
-//   replace/append   — 直接写入 (仅对 SOUL/AGENT-RULES 报错, 其余走 propose)
-//   propose          — 写入 pending-updates.json, 等用户批/驳
-//
-// 由于本 App 在 app.html 内运行, propose 实际上同步触发
-// 对话流中的"工具调用卡片"由 app.js 拦截。这里我们用同步写法。
+// ─── update_archive Skill ───
+// Updates the 6 archive files when user shares personal info
 (function() {
-  var VALID_FILES = ['SOUL.md', 'AGENT-RULES.md', 'USER.md', 'MEMORY.md'];
-  var USER_ONLY = ['SOUL.md', 'AGENT-RULES.md'];
-  var READONLY = ['MEMORY.md'];
-
-  function loadMem() {
-    var isBridge = (typeof AndroidMemory !== 'undefined' && AndroidMemory !== null);
-    if (isBridge) {
-      var raw = AndroidMemory.loadAll();
-      return { data: raw ? JSON.parse(raw) : null, isBridge: isBridge };
-    }
-    var cached = localStorage.getItem('nian_memories');
-    return { data: cached ? JSON.parse(cached) : null, isBridge: false };
-  }
-  function saveMem(mem) {
-    var json = JSON.stringify(mem);
-    if (typeof AndroidMemory !== 'undefined' && AndroidMemory !== null) {
-      AndroidMemory.saveAll(json);
-    } else {
-      localStorage.setItem('nian_memories', json);
-    }
-  }
-
   window.updateArchiveSkill = {
     definition: {
       name: "update_archive",
-      description: "写入或建议更新档案。SOUL.md / AGENT-RULES.md 仅用户可改, AI 调用会报错。USER.md 走 propose (写入 pending, 等用户批驳)。MEMORY.md 是事实表只读视图, AI 不直接改, 改用 add_fact / dedup_facts 工具。",
+      description: "当用户告诉你关于自己的个人信息（如姓名、职业、年龄、喜好、习惯、价值观、目标等），调用此工具将信息写入档案。可更新身份、灵魂、用户、工具、记忆、心跳六个档案文件。如果信息适合归入多个文件，请分别调用。",
       parameters: {
         type: "object",
         properties: {
           file: {
             type: "string",
-            enum: VALID_FILES,
-            description: "SOUL.md (用户专属) / AGENT-RULES.md (用户专属) / USER.md (propose) / MEMORY.md (只读)"
+            enum: ["identity", "soul", "user", "tools", "memory", "heartbeat"],
+            description: "要更新的档案文件：identity(身份/名字/定位)、soul(灵魂/价值观/说话方式)、user(用户/偏好/习惯)、tools(工具路径)、memory(稳定事实兜底)、heartbeat(心跳清单)"
           },
           content: {
             type: "string",
-            description: "要写入的内容"
+            description: "要写入的完整内容。如果只是补充新信息，请包含原有内容加上新增内容。一条一条清晰地写入。"
           },
           operation: {
             type: "string",
-            enum: ["replace", "append", "propose"],
-            description: "replace/append=直接替换或追加 (仅允许 USER.md 强制覆盖场景); propose=写入 pending 等用户批驳 (默认, 跨所有可写文件)"
-          },
-          reason: {
-            type: "string",
-            description: "为什么写这条 (展示给用户看)"
+            enum: ["replace", "append"],
+            description: "replace=完全替换该文件内容, append=在末尾追加新内容（默认append）"
           }
         },
         required: ["file", "content"]
@@ -67,54 +29,51 @@
 
     execute: function(args) {
       if (!args || !args.file || !args.content) {
-        return { error: "缺少必要参数 (file / content)" };
+        return { error: "缺少必要参数" };
       }
-      if (VALID_FILES.indexOf(args.file) === -1) {
+
+      var validFiles = ["identity", "soul", "user", "tools", "memory", "heartbeat"];
+      if (validFiles.indexOf(args.file) === -1) {
         return { error: "无效的档案文件: " + args.file };
       }
-      if (USER_ONLY.indexOf(args.file) !== -1) {
-        return {
-          error: args.file + " 仅用户可写，AI 永不可改。请直接告诉用户: '建议你手动在记忆页修改 " + args.file + "'。"
-        };
+
+      try {
+        // 统一走 MemoryService（app.html 中先于 skills 加载）：读 + 迁移 + 长度约束
+        if (typeof MemoryService === 'undefined') {
+          return { error: "记忆服务未加载" };
+        }
+
+        var op = args.operation || "append";
+        var content = args.content.trim();
+
+        // v5：identity/soul 写入角色档案，user/memory 写入语义记忆，其余保留在兼容文件
+        if (typeof MemoryService.applyArchiveUpdate === 'function') {
+          var ok = MemoryService.applyArchiveUpdate(args.file, content, op);
+          return ok
+            ? { success: true, file: args.file, message: "已更新档案: " + args.file }
+            : { error: "更新档案失败" };
+        }
+
+        var mem = MemoryService.load();
+        if (!mem) mem = MemoryService.createEmpty();
+        if (!mem.files) mem.files = {};
+
+        if (op === "replace" || !mem.files[args.file]) {
+          mem.files[args.file] = content;
+        } else {
+          var existing = mem.files[args.file] || "";
+          if (existing.indexOf(content) === -1) {
+            mem.files[args.file] = existing + (existing ? "\n" : "") + content;
+          } else {
+            return { success: true, message: "信息已存在，无需重复添加" };
+          }
+        }
+
+        MemoryService.save(mem);
+        return { success: true, file: args.file, message: "已更新档案文件: " + args.file };
+      } catch(e) {
+        return { error: "更新档案失败: " + e.message };
       }
-      if (READONLY.indexOf(args.file) !== -1) {
-        return {
-          error: args.file + " 是只读视图。AI 想写新事实请用 add_fact 工具; 想整理事实请等 dreaming 跑。"
-        };
-      }
-
-      var op = args.operation || 'propose';
-      var content = String(args.content).trim();
-      if (!content) return { error: "content 为空" };
-
-      // USER.md 走 propose
-      if (args.file === 'USER.md') {
-        var r = loadMem();
-        var mem = r.data || { version: 4, docs: {} };
-        if (!mem.docs) mem.docs = {};
-        if (!mem.docs['pending-updates.json']) mem.docs['pending-updates.json'] = { content: '[]', updatedAt: new Date().toISOString() };
-
-        var list = [];
-        try { list = JSON.parse(mem.docs['pending-updates.json'].content || '[]'); } catch(e) { list = []; }
-        var item = {
-          id: 'pend_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-          type: 'user_md_update',
-          file: args.file,
-          operation: op === 'propose' ? 'append' : op,
-          content: content,
-          reason: args.reason || '',
-          status: 'pending',
-          createdAt: new Date().toISOString()
-        };
-        list.push(item);
-        mem.docs['pending-updates.json'].content = JSON.stringify(list, null, 2);
-        mem.docs['pending-updates.json'].updatedAt = new Date().toISOString();
-        mem.version = 4;
-        saveMem(mem);
-        return { success: true, pending: true, itemId: item.id, message: "已写入 USER.md 待批列表，等用户在记忆页确认" };
-      }
-
-      return { error: "未知分支" };
     }
   };
 })();

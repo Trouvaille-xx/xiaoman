@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "tools": {
+    "enabled": null,
+    "catalog": [
+      {
+        "name": "search_notes",
+        "desc": "搜索日记笔记（关键词/标签/日期）",
+        "category": "记忆"
+      },
+      {
+        "name": "get_note",
+        "desc": "按 id 获取笔记全文",
+        "category": "记忆"
+      },
+      {
+        "name": "note_stats",
+        "desc": "日记统计（总数/连续天数/标签榜）",
+        "category": "记忆"
+      },
+      {
+        "name": "daily_review",
+        "desc": "回顾最近几天的日记",
+        "category": "记忆"
+      },
+      {
+        "name": "create_note",
+        "desc": "帮用户创建新笔记",
+        "category": "写作"
+      },
+      {
+        "name": "update_archive",
+        "desc": "把用户个人信息写入记忆档案",
+        "category": "记忆"
+      },
+      {
+        "name": "remember_to",
+        "desc": "记住待办并在指定日期提醒",
+        "category": "关怀"
+      },
+      {
+        "name": "get_special_day",
+        "desc": "查询节日/节气/今日提醒",
+        "category": "关怀"
+      },
+      {
+        "name": "send_proactive_mail",
+        "desc": "小满主动给用户发信",
+        "category": "关怀"
+      },
+      {
+        "name": "web_search",
+        "desc": "联网搜索（DuckDuckGo）",
+        "category": "网络"
+      },
+      {
+        "name": "get_weather",
+        "desc": "实时天气（wttr.in）",
+        "category": "网络"
+      },
+      {
+        "name": "run_insight",
+        "desc": "深度洞察分析（16 种模式）",
+        "category": "洞察"
+      },
+      {
+        "name": "list_insight_modes",
+        "desc": "列出可用洞察模式",
+        "category": "洞察"
+      },
+      {
+        "name": "generate_note_image",
+        "desc": "根据随记内容生成配图",
+        "category": "创作"
+      },
+      {
+        "name": "penpal_weekly_letter",
+        "desc": "笔友每周来信（回顾最近一周笔记）",
+        "category": "关怀"
+      }
+    ]
+  },
+  "prompts": {
+    "defaults": {},
+    "tasks": {},
+    "caps": {},
+    "insight": [],
+    "penpals": {}
+  },
+  "model": {
+    "defaultModel": "gpt-4o",
+    "imageModel": "gpt-image-2",
+    "embeddingModel": "text-embedding-3-small"
+  },
+  "telemetry": {
+    "url": ""
+  }
+}
