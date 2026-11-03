@@ -26,9 +26,21 @@ if (typeof AndroidStorage === 'undefined') {
 window.__applySafeInsets = function(top, bottom, keyboard) {
     var dpr = window.devicePixelRatio || 1;
     var r = document.documentElement;
+    var kb = Math.round((keyboard || 0) / dpr);
     r.style.setProperty('--safe-area-top', Math.round(top / dpr) + 'px');
-    r.style.setProperty('--safe-area-bottom', Math.round(bottom / dpr) + 'px');
+    // 键盘弹出时底部安全区已被键盘覆盖，避免重复留白
+    r.style.setProperty('--safe-area-bottom', Math.round((keyboard ? 0 : (bottom || 0)) / dpr) + 'px');
+    r.style.setProperty('--keyboard-height', kb + 'px');
 };
+
+// 键盘弹出后确保输入框可见；页面底部已经通过 --keyboard-height 抬到键盘上方
+document.addEventListener('focusin', function(e) {
+    var t = e.target;
+    if (!t || (t.id !== 'threadInput' && t.id !== 'replyComposeInput')) return;
+    setTimeout(function() {
+        try { t.scrollIntoView({ block: 'nearest' }); } catch (err) {}
+    }, 300);
+});
 
 var hasMailBridge = (typeof AndroidMail !== 'undefined' && AndroidMail !== null);
 
@@ -507,6 +519,7 @@ function openDetail(mailId) {
             '<button class="letter-reply-btn secondary" onclick="showReplyInput(' + "'" + mailId + "'" + ')">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>回复' +
             '</button>' +
+            '<button class="letter-reply-btn secondary" onclick="deleteMail(' + "'" + mailId + "'" + ')">删除</button>' +
             '</div>' +
             '</div>';
     }
@@ -536,6 +549,63 @@ function markAllRead() {
     if (hasMailBridge) { AndroidMail.markAllRead(); }
     mails.forEach(function(m) { m.read = true; });
     renderEnvelopeWall();
+}
+
+// 删除单封来信：普通信件走原生桥，主动消息走 settings.proactiveMails
+function removeMailFromStorage(mail) {
+    if (!mail) return false;
+    if (mail.isProactive) {
+        try {
+            var s = hasBridge ? AndroidSettings.loadSettings() : localStorage.getItem('nian_settings');
+            var settings = s ? JSON.parse(s) : {};
+            settings.proactiveMails = (settings.proactiveMails || []).filter(function(m) { return m.id !== mail.id; });
+            if (hasBridge) AndroidSettings.saveSettings(JSON.stringify(settings));
+            else localStorage.setItem('nian_settings', JSON.stringify(settings));
+            return true;
+        } catch(e) { return false; }
+    }
+    if (hasMailBridge) {
+        if (typeof AndroidMail.deleteMail !== 'function') {
+            showToast('请更新 App 后再删除来信');
+            return false;
+        }
+        AndroidMail.deleteMail(mail.id);
+        return true;
+    }
+    try {
+        var cache = JSON.parse(localStorage.getItem('nian_mails_cache') || '[]').filter(function(m) { return m.id !== mail.id; });
+        localStorage.setItem('nian_mails_cache', JSON.stringify(cache));
+        return true;
+    } catch(e) { return false; }
+}
+
+function deleteMail(mailId) {
+    var mail = null;
+    for (var i = 0; i < mails.length; i++) {
+        if (mails[i].id === mailId) { mail = mails[i]; break; }
+    }
+    if (!mail) return;
+    if (!confirm('删除这封来信？')) return;
+    if (!removeMailFromStorage(mail)) return;
+    mails = mails.filter(function(m) { return m.id !== mailId; });
+    closeDetail();
+    renderEnvelopeWall();
+    renderPenpalWall();
+    showToast('来信已删除');
+}
+
+function clearReadMails() {
+    var targets = mails.filter(function(m) { return m.status === 'replied' && m.read; });
+    if (!targets.length) { showToast('没有已读来信'); return; }
+    if (!confirm('清空 ' + targets.length + ' 封已读来信？')) return;
+    var removed = 0;
+    targets.forEach(function(m) { if (removeMailFromStorage(m)) removed++; });
+    var ids = {};
+    targets.forEach(function(m) { ids[m.id] = 1; });
+    mails = mails.filter(function(m) { return !ids[m.id]; });
+    renderEnvelopeWall();
+    renderPenpalWall();
+    showToast('已清空 ' + removed + ' 封已读来信');
 }
 
 var pendingNoteContent = '';

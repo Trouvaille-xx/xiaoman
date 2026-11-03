@@ -1,12 +1,12 @@
 {
-  "version": "20261103-203641-438a92",
-  "updatedAt": "2026-11-03T12:36:41.521Z",
+  "version": "20261103-204159-03c726",
+  "updatedAt": "2026-11-03T12:41:59.606Z",
   "count": 50,
   "files": [
     {
       "path": "agent.js",
-      "hash": "3b7370c225b0052b0c822de811b908b73bfd4e7f",
-      "size": 16913
+      "hash": "2ff0cf896dae3536960ef2351026b8ddcb30e680",
+      "size": 16915
     },
     {
       "path": "app-config.js",
@@ -15,8 +15,8 @@
     },
     {
       "path": "app.html",
-      "hash": "78bf821c4300d1577ebd48b74832d92f7ca9e297",
-      "size": 168088
+      "hash": "6696c70f5d4e86393b2bc920280c88a3d33ed394",
+      "size": 168090
     },
     {
       "path": "app.js",
@@ -60,18 +60,18 @@
     },
     {
       "path": "mail/mail.css",
-      "hash": "ec1b3b8c0b34ed0d995edf10124a2e20ab77beef",
-      "size": 16611
+      "hash": "085ebc89cede9e110d2f7f4a680af5f9f827b286",
+      "size": 17236
     },
     {
       "path": "mail/mail.html",
-      "hash": "40902eb1c10996d579938c39c24730755e30b631",
-      "size": 3717
+      "hash": "74f485fb0f92af41f565b1d398db36d8a802f6d8",
+      "size": 3841
     },
     {
       "path": "mail/mail.js",
-      "hash": "1f39a1e92111f3ef783fa1dc056c0c89933151d8",
-      "size": 31155
+      "hash": "a2c5ea4a1e92d0b9a8ca218abc867b4e8e6a7c7f",
+      "size": 34158
     },
     {
       "path": "mascot/xiaoman-avatar.png",

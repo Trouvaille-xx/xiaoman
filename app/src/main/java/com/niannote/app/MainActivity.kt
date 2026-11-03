@@ -742,6 +742,19 @@ class MainActivity : AppCompatActivity() {
             }
             prefs.edit().putString("mails", mails.toString()).apply()
         }
+
+        @JavascriptInterface
+        fun deleteMail(mailId: String) {
+            val prefs = context.getSharedPreferences(mailsKey, Context.MODE_PRIVATE)
+            val raw = prefs.getString("mails", "[]") ?: "[]"
+            val mails = JSONArray(raw)
+            val remaining = JSONArray()
+            for (i in 0 until mails.length()) {
+                val mail = mails.getJSONObject(i)
+                if (mail.optString("id") != mailId) remaining.put(mail)
+            }
+            prefs.edit().putString("mails", remaining.toString()).apply()
+        }
     }
 
     inner class MemoryInterface(private val context: Context) {
