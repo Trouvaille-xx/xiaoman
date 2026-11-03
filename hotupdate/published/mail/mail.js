@@ -595,6 +595,10 @@ function deleteMail(mailId) {
 }
 
 function clearReadMails() {
+    if (hasMailBridge && typeof AndroidMail.deleteMail !== 'function') {
+        showToast('请更新 App 后再清空已读');
+        return;
+    }
     var targets = mails.filter(function(m) { return m.status === 'replied' && m.read; });
     if (!targets.length) { showToast('没有已读来信'); return; }
     if (!confirm('清空 ' + targets.length + ' 封已读来信？')) return;
