@@ -46,6 +46,8 @@
         // Android 的 @JavascriptInterface 代理对象不支持 this 重新绑定。
         if (fnName === "getAsync") {
           AndroidHttp.getAsync(args[0], id);
+        } else if (fnName === "getAsyncWithHeaders") {
+          AndroidHttp.getAsyncWithHeaders(args[0], args[1], id);
         } else if (fnName === "postAsync") {
           AndroidHttp.postAsync(args[0], args[1], args[2], id);
         }
@@ -125,6 +127,19 @@
     });
   }
 
+  // 带请求头的 GET（拉取 /models 等）
+  function getJson(url, headers) {
+    if (typeof AndroidHttp !== "undefined" && AndroidHttp !== null) {
+      return callBridge("getAsyncWithHeaders", [url, JSON.stringify(headers || {})]);
+    }
+    return fetch(url, { headers: headers || {} }).then(function(r) {
+      return r.text().then(function(t) {
+        if (r.status < 200 || r.status >= 300) throw new Error("HTTP " + r.status + ": " + t.substring(0, 500));
+        return { ok: true, status: r.status, data: t };
+      });
+    });
+  }
+
   // 便捷方法：POST 并解析 JSON，2xx 才 resolve；返回 Promise<解析后的对象或 {raw} >
   function postJson(url, headers, body) {
     return postAsync(url, headers, body).then(function(resp) {
@@ -183,6 +198,7 @@
   }
   window.NativeHttp = {
     getAsync: getAsync,
+    getJson: getJson,
     postAsync: postAsync,
     postJson: postJson,
     apiBase: apiBase,

@@ -1248,6 +1248,9 @@ function executeInsight(modeId) {
                 brand.appendChild(brandDot);
                 document.getElementById('appHeader').insertBefore(brand, document.querySelector('.header-icon[onclick*="openMailbox"]'));
             }
+            brand.style.cursor = 'pointer';
+            brand.title = '记忆管理';
+            brand.onclick = function() { openMemory(); };
             var mailIcon = document.querySelector('.header-icon[onclick*="openMailbox"]');
             if (mailIcon) mailIcon.style.marginLeft = 'auto';
             var memIcon = document.getElementById('memoryIcon');
@@ -3659,6 +3662,7 @@ function shareNote(encodedContent) {
             document.getElementById('settingsBackBtn').onclick = closeSettings;
             document.getElementById('settingsTitle').textContent = '设置';
             document.getElementById('settingsMenu').style.display = '';
+            var openActs = document.getElementById('settingsHeaderActions'); if (openActs) openActs.innerHTML = '';
             document.querySelectorAll('.settings-sub').forEach(function(el) { el.classList.remove('active'); });
             currentSettingsSub = null;
         }
@@ -3668,6 +3672,7 @@ function shareNote(encodedContent) {
             document.getElementById('settingsOverlay').classList.remove('open');
             document.querySelectorAll('.settings-sub').forEach(function(el) { el.classList.remove('active'); });
             document.getElementById('settingsMenu').style.display = '';
+            var closeActs = document.getElementById('settingsHeaderActions'); if (closeActs) closeActs.innerHTML = '';
             currentSettingsSub = null;
         }
 
@@ -3677,10 +3682,14 @@ function shareNote(encodedContent) {
             var subEl = document.getElementById('settingsSub' + sub.charAt(0).toUpperCase() + sub.slice(1));
             if (subEl) subEl.classList.add('active');
             currentSettingsSub = sub;
-            var labelMap = { ai: 'AI 设置', import: '导入/导出', prefs: '偏好设置', memory: '记忆管理', prompts: '提示词管理' };
+            var labelMap = { ai: '模型设置', import: '导入/导出', prefs: '偏好设置', memory: '记忆管理', prompts: '提示词管理' };
             document.getElementById('settingsTitle').textContent = labelMap[sub] || '设置';
             document.getElementById('settingsBackBtn').onclick = backToSettingsMenu;
-            if (sub === 'ai') loadAISettings();
+            var acts = document.getElementById('settingsHeaderActions'); if (acts) acts.innerHTML = '';
+            if (sub === 'ai') {
+                if (window.ModelSettings) window.ModelSettings.renderRoot();
+                else loadAISettings();
+            }
             if (sub === 'prompts') loadPromptSettings();
             if (sub === 'memory') loadMemorySettings();
         }
@@ -3690,6 +3699,7 @@ function shareNote(encodedContent) {
             document.getElementById('settingsMenu').style.display = '';
             document.getElementById('settingsTitle').textContent = '设置';
             document.getElementById('settingsBackBtn').onclick = closeSettings;
+            var backActs = document.getElementById('settingsHeaderActions'); if (backActs) backActs.innerHTML = '';
             currentSettingsSub = null;
         }
 
@@ -4237,6 +4247,7 @@ function shareNote(encodedContent) {
         window.closeHistoryPanel = closeHistoryPanel;
         window.newConversation = newConversation;
         window.showOnboarding = showOnboarding;
+        window.backToSettingsMenu = backToSettingsMenu;
         window.finishOnboarding = finishOnboarding;
         window.openMemory = openMemory;
         window.switchToConversation = switchToConversation;

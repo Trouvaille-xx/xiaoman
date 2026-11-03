@@ -1749,7 +1749,7 @@
         .nian-note-refs > summary {
             cursor: pointer;
             padding: 9px 12px;
-            font-size: 12px;
+            font-size: 11px;
             color: var(--accent);
             list-style: none;
             display: flex;
@@ -1771,7 +1771,7 @@
             display: flex;
             gap: 8px;
             align-items: baseline;
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
             user-select: none;
         }
@@ -1792,7 +1792,7 @@
             padding: 10px 12px;
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.62);
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1.7;
             color: var(--text-secondary);
             white-space: pre-wrap;
@@ -1800,3 +1800,65 @@
             max-height: 260px;
             overflow-y: auto;
         }
+        /* ─── 模型设置 / 服务商管理 ─── */
+        .settings-header-actions { display: flex; align-items: center; gap: 8px; }
+        .settings-add-btn {
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--accent); color: #fff; font-size: 22px; line-height: 1;
+            cursor: pointer; user-select: none;
+        }
+        .model-kind-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 12px; }
+        .model-kind-tabs::-webkit-scrollbar { display: none; }
+        .model-kind-tab {
+            flex: none; padding: 7px 12px; border-radius: 20px;
+            background: var(--card); border: 1px solid var(--border);
+            font-size: 12px; color: var(--text-secondary); cursor: pointer;
+        }
+        .model-kind-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .model-list { display: flex; flex-direction: column; gap: 8px; }
+        .model-row {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 12px; cursor: pointer;
+        }
+        .model-row.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+        .model-row-main { flex: 1; min-width: 0; }
+        .model-row-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .model-row-sub { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .model-active-badge { font-size: 10px; color: var(--accent); background: var(--accent-light); padding: 2px 7px; border-radius: 10px; flex: none; }
+        .model-switch { position: relative; width: 38px; height: 22px; flex: none; }
+        .model-switch input { display: none; }
+        .model-switch span { position: absolute; inset: 0; background: #d6d0c4; border-radius: 22px; transition: .2s; }
+        .model-switch span::after { content: ''; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .2s; }
+        .model-switch input:checked + span { background: var(--accent); }
+        .model-switch input:checked + span::after { transform: translateX(16px); }
+        .model-section-title { font-size: 12px; color: var(--text-muted); margin: 18px 0 8px; }
+        .provider-list { display: flex; flex-direction: column; gap: 6px; }
+        .provider-row {
+            display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+        }
+        .provider-avatar { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; flex: none; }
+        .provider-row-main { flex: 1; min-width: 0; }
+        .provider-row-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .provider-row-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .model-empty { text-align: center; padding: 36px 16px; color: var(--text-muted); font-size: 13px; line-height: 1.8; }
+        .model-advanced { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+        .model-advanced label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px; }
+        .model-advanced input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; background: var(--bg); color: var(--text); font-size: 13px; }
+        .model-form-row { margin-bottom: 12px; }
+        .model-form-row label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+        .model-form-row input, .model-form-row select {
+            width: 100%; box-sizing: border-box; border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; background: var(--card); color: var(--text); font-size: 13px;
+        }
+        .model-form-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .model-sync-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+        .model-sync-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+        .model-tabbar { display: flex; gap: 6px; margin-bottom: 14px; }
+        .model-tab { flex: 1; text-align: center; padding: 8px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+        .model-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .model-mini-btn { border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); border-radius: 8px; padding: 7px 10px; font-size: 12px; cursor: pointer; }
+        .model-mini-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .model-mini-btn.danger { color: #c0392b; }

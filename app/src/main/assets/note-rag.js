@@ -25,6 +25,7 @@
     var dim = parseInt(s.embeddingDimensions, 10);
     return {
       key: key,
+      rerankKey: s.rerankApiKey || s.embeddingApiKey || key,
       embUrl: s.embeddingApiUrl || DEFAULT_EMB_URL,
       embModel: s.embeddingModel || DEFAULT_EMB_MODEL,
       rerankUrl: s.rerankApiUrl || DEFAULT_RERANK_URL,
@@ -271,7 +272,7 @@
       top_n: Math.min(topN || 8, docs.length),
       return_documents: false
     };
-    return NativeHttp.postJson(c.rerankUrl, { Authorization: 'Bearer ' + c.key }, body).then(function(data) {
+    return NativeHttp.postJson(c.rerankUrl, { Authorization: 'Bearer ' + (c.rerankKey || c.key) }, body).then(function(data) {
       var rows = data && data.results;
       if (!rows || !rows.length) return null;
       rows.sort(function(a, b) { return (b.relevance_score || 0) - (a.relevance_score || 0); });

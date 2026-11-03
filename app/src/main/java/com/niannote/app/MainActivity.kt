@@ -510,6 +510,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        private fun getImpl(url: String, headersJson: String): JSONObject {
+            val connection = buildConnection(url, "GET", 15000, 30000)
+            try {
+                val headers = JSONObject(headersJson)
+                val keys = headers.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    connection.setRequestProperty(key, headers.optString(key))
+                }
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val text = if (stream != null) readLimited(stream) else ""
+                return JSONObject().put("ok", true).put("status", status).put("data", text)
+            } finally {
+                connection.disconnect()
+            }
+        }
+
         private fun postImpl(url: String, headersJson: String, body: String): JSONObject {
             val connection = buildConnection(url, "POST", 30000, 60000)
             try {
@@ -562,6 +580,19 @@ class MainActivity : AppCompatActivity() {
                         .put("body", "")
                         .put("error", e.message ?: "unknown error")
                         .toString()
+            }
+        }
+
+        /** 带请求头的异步 GET：用于拉取服务商模型列表。 */
+        @JavascriptInterface
+        fun getAsyncWithHeaders(url: String, headersJson: String, callbackId: String) {
+            httpExecutor.execute {
+                val payload = try {
+                    getImpl(url, headersJson)
+                } catch (e: Exception) {
+                    JSONObject().put("ok", false).put("error", e.message ?: "unknown error")
+                }
+                postToJs("window.NativeHttp && window.NativeHttp.__onResponse(${JSONObject.quote(callbackId)}, ${payload.toString()})")
             }
         }
 

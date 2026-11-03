@@ -1,7 +1,7 @@
 {
-  "version": "20261103-235606-aab3f0",
-  "updatedAt": "2026-11-03T15:56:06.513Z",
-  "count": 51,
+  "version": "20261104-002628-c78ab4",
+  "updatedAt": "2026-11-03T16:26:28.290Z",
+  "count": 52,
   "files": [
     {
       "path": "agent.js",
@@ -15,13 +15,13 @@
     },
     {
       "path": "app.html",
-      "hash": "f5aee2242eae12bf063623aea7419574891d3561",
-      "size": 171574
+      "hash": "47fb0c5d3a012158ca0f7efd61b5c34d1b75d43c",
+      "size": 171988
     },
     {
       "path": "app.js",
-      "hash": "40cd62a2a60312c299e4e72dc6e58ed5ac15f91c",
-      "size": 213238
+      "hash": "3498a2e3f948cfe0962a7cf05a4e35dfc483e481",
+      "size": 214010
     },
     {
       "path": "conversation-memory.js",
@@ -129,14 +129,19 @@
       "size": 88714
     },
     {
+      "path": "model-settings.js",
+      "hash": "21e3e64c20fe48c08112304bd861c6728613b43d",
+      "size": 34260
+    },
+    {
       "path": "native-http.js",
-      "hash": "ce504764ded02af6e8613835f54844dac1486ba3",
-      "size": 8542
+      "hash": "85222a2d67e5f78c3b12a3d23ea1826eb561f44c",
+      "size": 9232
     },
     {
       "path": "note-rag.js",
-      "hash": "44eca7631aed1e25febf28d5bf6ed7511e841151",
-      "size": 11018
+      "hash": "51da158a8ce4881f5c76d5f249883be382613b1b",
+      "size": 11096
     },
     {
       "path": "penpals_data.json",
@@ -225,8 +230,8 @@
     },
     {
       "path": "style.css",
-      "hash": "725b8509b4d8bc711ae538503a58083a67e59686",
-      "size": 47927
+      "hash": "495fc5af6ed2e215a668720b0fe32596e02899bc",
+      "size": 53275
     },
     {
       "path": "styles/healing_thumb.jpg",

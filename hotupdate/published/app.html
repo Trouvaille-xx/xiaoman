@@ -3925,11 +3925,6 @@
                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
                 </div>
-                <div class="header-icon" id="memoryIcon" onclick="openMemory()" title="记忆">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2C9 2 7 4 7 6.5C7 8 8 9 9 10C7.5 10 6 11.5 6 13.5C6 16 8 18 9 18C9.5 18 10 17.5 10.5 17H13.5C14 17.5 14.5 18 15 18C16 18 18 16 18 13.5C18 11.5 16.5 10 15 10C16 9 17 8 17 6.5C17 4 15 2 12 2Z"/>
-                    </svg>
-                </div>
             </div>
         </div>
 
@@ -4196,6 +4191,7 @@
                     </div>
                     <span class="settings-title" id="settingsTitle">设置</span>
                 </div>
+                <div class="settings-header-actions" id="settingsHeaderActions"></div>
             </div>
             <div class="settings-content" id="settingsContent">
                 <div class="settings-section" id="settingsMenu">
@@ -4208,8 +4204,8 @@
                                     </svg>
                                 </div>
                                 <div class="settings-menu-item-text">
-                                    <div class="settings-menu-item-label">AI 设置</div>
-                                    <div class="settings-menu-item-desc">配置 AI 模型、API 地址和密钥</div>
+                                    <div class="settings-menu-item-label">模型设置</div>
+                                    <div class="settings-menu-item-desc">管理服务商、模型与 API 配置</div>
                                 </div>
                             </div>
                             <svg class="settings-menu-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4252,85 +4248,7 @@
                 </div>
 
                 <div class="settings-sub" id="settingsSubAi">
-                    <div class="settings-section">
-                        <div class="settings-group">
-                            <div class="settings-group-item">
-                                <div class="settings-label">API 地址</div>
-                                <div class="settings-desc">AI 模型的 API 端点地址</div>
-                                <input class="settings-input" id="aiApiUrl" placeholder="https://api.openai.com/v1" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">API 密钥</div>
-                                <div class="settings-desc">你的 API Key</div>
-                                <input class="settings-input" id="aiApiKey" type="password" placeholder="sk-..." />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">模型选择</div>
-                                <div class="settings-desc">输入 AI 模型名称（如 gpt-4o、deepseek-chat 等）</div>
-                                <input class="settings-input" id="aiModel" placeholder="gpt-4o" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">上下文预算（tokens）</div>
-                                <div class="settings-desc">每次对话最多携带的上下文 token 数。模型支持长上下文时可填 32000、128000 或 1000000；越大越记得住，但更慢、更贵。留空默认 128000。</div>
-                                <input class="settings-input" id="aiContextBudget" type="number" min="1000" max="1000000" step="1000" placeholder="128000" />
-                            </div>
-                        </div>
-                        <div class="settings-group">
-                            <div class="settings-group-item">
-                                <div class="settings-label">笔记 RAG（SiliconFlow）</div>
-                                <div class="settings-desc">仅当用户表达回忆/自我觉察/情绪梳理意图时触发；平时优先用模型自身记忆。用 Qwen3-Embedding 做向量召回，再用 Qwen3-Reranker 重排。笔记内容会发送到 SiliconFlow 做 embedding/rerank，向量只存在本机；留空 Key 则退回 BM25 + LLM 重排。</div>
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">Embedding API 地址</div>
-                                <input class="settings-input" id="aiEmbeddingUrl" placeholder="https://api.siliconflow.cn/v1/embeddings" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">SiliconFlow API Key</div>
-                                <div class="settings-desc">Embedding 和 Rerank 共用；只保存在本机，不会上传到 GitHub</div>
-                                <input class="settings-input" id="aiEmbeddingKey" type="password" placeholder="sk-..." />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">Embedding 模型</div>
-                                <input class="settings-input" id="aiEmbeddingModel" placeholder="Qwen/Qwen3-Embedding-8B" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">Rerank API 地址</div>
-                                <input class="settings-input" id="aiRerankUrl" placeholder="https://api.siliconflow.cn/v1/rerank" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">Rerank 模型</div>
-                                <input class="settings-input" id="aiRerankModel" placeholder="Qwen/Qwen3-Reranker-8B" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">笔记向量索引</div>
-                                <div class="settings-desc" id="noteRagStatus">首次主观召回时自动补建索引（最多 64 条）；也可点下方按钮为全部笔记建立索引</div>
-                                <button class="settings-btn settings-btn-secondary" onclick="rebuildNoteRagIndex()" style="margin-top:8px;">重建笔记向量索引</button>
-                            </div>
-                        </div>
-                        <div class="settings-group">
-                            <div class="settings-group-item">
-                                <div class="settings-label">配图模型</div>
-                                <div class="settings-desc">图像生成模型（如 gpt-image-2、dall-e-3），留空则默认 gpt-image-2</div>
-                                <input class="settings-input" id="aiImageModel" placeholder="gpt-image-2" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">配图 API 地址（可选）</div>
-                                <div class="settings-desc">如果图像生成使用不同的 API 端点，在此填写（留空则复用上方 API 地址）</div>
-                                <input class="settings-input" id="aiImageApiUrl" placeholder="留空即复用 API 地址" />
-                            </div>
-                            <div class="settings-group-item">
-                                <div class="settings-label">配图 API 密钥（可选）</div>
-                                <div class="settings-desc">图像生成专用的 API Key（若与主 API 不同，在此填写；留空则复用上方密钥）</div>
-                                <input class="settings-input" id="aiImageApiKey" type="password" placeholder="留空即复用 API 密钥" />
-                            </div>
-                        </div>
-                        <div style="margin-top:12px;">
-                            <button class="settings-btn settings-btn-primary" onclick="saveAISettings()">保存 AI 设置</button>
-                            <div class="settings-status" id="aiSettingsStatus"></div>
-                            <button class="settings-btn settings-btn-secondary" onclick="testAIConnection()" style="margin-top:10px;">测试 AI 连接</button>
-                            <div class="settings-status" id="aiTestStatus" style="margin-top:6px;"></div>
-                        </div>
-                    </div>
+                    <div class="settings-section" id="modelSettingsRoot"></div>
                 </div>
 
                                 <div class="settings-sub" id="settingsSubImport">
@@ -4600,6 +4518,7 @@
     <script src="memory-service.js"></script>
     <script src="memory-engine.js"></script>
     <script src="note-rag.js"></script>
+    <script src="model-settings.js"></script>
     <script src="conversation-memory.js"></script>
     <script src="skills/send_proactive_mail.js"></script>
     <script src="skills/update_archive.js"></script>
@@ -4620,5 +4539,133 @@
     <script src="agent.js"></script>
     <script src="app.js"></script>
     <script src="v6-integration.js"></script>
+<style>
+/* ─── AI 回复下的参考日记（可折叠）─── */
+        .nian-note-refs {
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: rgba(253, 250, 243, 0.72);
+            overflow: hidden;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        .nian-note-refs > summary {
+            cursor: pointer;
+            padding: 9px 12px;
+            font-size: 11px;
+            color: var(--accent);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+        .nian-note-refs > summary::-webkit-details-marker { display: none; }
+        .nian-note-refs > summary::before { content: '▸'; font-size: 10px; }
+        .nian-note-refs[open] > summary::before { content: '▾'; }
+        .nian-note-ref-list { padding: 0 12px 10px; }
+        .nian-note-ref-item {
+            border-top: 1px dashed var(--border);
+            padding: 8px 0;
+        }
+        .nian-note-ref-item > summary {
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            font-size: 11px;
+            color: var(--text-secondary);
+            user-select: none;
+        }
+        .nian-note-ref-item > summary::-webkit-details-marker { display: none; }
+        .nian-note-ref-date {
+            flex-shrink: 0;
+            color: var(--text-muted);
+            font-family: 'Playfair Display', Georgia, serif;
+            font-style: italic;
+        }
+        .nian-note-ref-preview {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .nian-note-ref-content {
+            margin-top: 8px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.62);
+            font-size: 12px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        /* ─── 模型设置 / 服务商管理 ─── */
+        .settings-header-actions { display: flex; align-items: center; gap: 8px; }
+        .settings-add-btn {
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--accent); color: #fff; font-size: 22px; line-height: 1;
+            cursor: pointer; user-select: none;
+        }
+        .model-kind-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 12px; }
+        .model-kind-tabs::-webkit-scrollbar { display: none; }
+        .model-kind-tab {
+            flex: none; padding: 7px 12px; border-radius: 20px;
+            background: var(--card); border: 1px solid var(--border);
+            font-size: 12px; color: var(--text-secondary); cursor: pointer;
+        }
+        .model-kind-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .model-list { display: flex; flex-direction: column; gap: 8px; }
+        .model-row {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 12px; cursor: pointer;
+        }
+        .model-row.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+        .model-row-main { flex: 1; min-width: 0; }
+        .model-row-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .model-row-sub { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        .model-active-badge { font-size: 10px; color: var(--accent); background: var(--accent-light); padding: 2px 7px; border-radius: 10px; flex: none; }
+        .model-switch { position: relative; width: 38px; height: 22px; flex: none; }
+        .model-switch input { display: none; }
+        .model-switch span { position: absolute; inset: 0; background: #d6d0c4; border-radius: 22px; transition: .2s; }
+        .model-switch span::after { content: ''; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .2s; }
+        .model-switch input:checked + span { background: var(--accent); }
+        .model-switch input:checked + span::after { transform: translateX(16px); }
+        .model-section-title { font-size: 12px; color: var(--text-muted); margin: 18px 0 8px; }
+        .provider-list { display: flex; flex-direction: column; gap: 6px; }
+        .provider-row {
+            display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+        }
+        .provider-avatar { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; flex: none; }
+        .provider-row-main { flex: 1; min-width: 0; }
+        .provider-row-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .provider-row-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .model-empty { text-align: center; padding: 36px 16px; color: var(--text-muted); font-size: 13px; line-height: 1.8; }
+        .model-advanced { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+        .model-advanced label { font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px; }
+        .model-advanced input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; background: var(--bg); color: var(--text); font-size: 13px; }
+        .model-form-row { margin-bottom: 12px; }
+        .model-form-row label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+        .model-form-row input, .model-form-row select {
+            width: 100%; box-sizing: border-box; border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; background: var(--card); color: var(--text); font-size: 13px;
+        }
+        .model-form-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .model-sync-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+        .model-sync-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+        .model-tabbar { display: flex; gap: 6px; margin-bottom: 14px; }
+        .model-tab { flex: 1; text-align: center; padding: 8px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+        .model-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .model-mini-btn { border: 1px solid var(--border); background: var(--card); color: var(--text-secondary); border-radius: 8px; padding: 7px 10px; font-size: 12px; cursor: pointer; }
+        .model-mini-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .model-mini-btn.danger { color: #c0392b; }
+
+</style>
 </body>
 </html>
