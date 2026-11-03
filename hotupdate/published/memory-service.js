@@ -1697,7 +1697,11 @@
       var config = (typeof AndroidSettings !== 'undefined' && AndroidSettings.loadSettings)
         ? JSON.parse(AndroidSettings.loadSettings())
         : JSON.parse(localStorage.getItem('nian_settings') || '{}');
-      if (!config || !config.apiUrl || !config.apiKey) return null;
+      if (!config) return null;
+      if (config.embeddingApiUrl && config.embeddingApiKey) {
+        return { url: config.embeddingApiUrl.replace(/\/+$/, ''), key: config.embeddingApiKey, model: embeddingModel() };
+      }
+      if (!config.apiUrl || !config.apiKey) return null;
       return { url: config.apiUrl.replace(/\/+$/, ''), key: config.apiKey, model: embeddingModel() };
     } catch(e) { return null; }
   }

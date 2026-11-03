@@ -221,7 +221,7 @@
     var page = ranked.slice(offset, offset + limit);
     var notes = page.map(function(item) {
       var text = contentText(item.note.content);
-      return {
+      var out = {
         id: item.note.id,
         date: String(item.note.createdAt || '').slice(0, 10),
         preview: text.substring(0, 50),
@@ -229,6 +229,10 @@
         score: Math.round((item.score || 0) * 100) / 100,
         match: item.match || 'recent'
       };
+      if (query && typeof window.__addNoteRef === 'function') {
+        window.__addNoteRef({ id: out.id, date: out.date, preview: text.substring(0, 100) });
+      }
+      return out;
     });
     var out = {
       query: query || '',
@@ -246,7 +250,7 @@
   window.searchNotesSkill = {
     definition: {
       name: "search_notes",
-      description: "三级 RAG 搜索日记笔记：Qwen3-Embedding 向量召回 + BM25 + Qwen3-Reranker 语义重排；未配置 embedding 时退回 BM25 + LLM 重排。返回紧凑索引（id、日期、50字预览、标签、score），带 total/offset/hasMore 和 rag 索引状态。默认最多 8 条；用 offset 翻页，用 query/tags/days 缩小范围；需要全文时用 get_note(noteId)。",
+      description: "仅在用户表达回忆/自我觉察/情绪梳理等主观意图时使用；普通寒暄与事实问答不要调用。三级 RAG：Qwen3-Embedding 向量召回 + BM25 + Qwen3-Reranker 语义重排；未配置 embedding 时退回 BM25 + LLM 重排。返回紧凑索引（id、日期、50字预览、标签、score），带 total/offset/hasMore 和 rag 索引状态。默认最多 8 条；用 offset 翻页，用 query/tags/days 缩小范围；需要全文时用 get_note(noteId)。",
       parameters: {
         type: "object",
         properties: {

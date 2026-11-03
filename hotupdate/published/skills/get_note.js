@@ -39,6 +39,9 @@
         .replace(/<br\s*\/?>/g, "\n").replace(/<\/p>/g, "\n").replace(/<[^>]+>/g, "")
         .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
         .replace(/\n{3,}/g, "\n\n").trim();
+      if (typeof window.__addNoteRef === 'function') {
+        window.__addNoteRef({ id: note.id, date: String(note.createdAt || '').slice(0, 10), preview: content.substring(0, 100) });
+      }
       return {
         id: note.id,
         content: content.substring(0, 3000),

@@ -476,6 +476,53 @@ function renderUserMessageEl(el, rawContent) {
     el.appendChild(stack);
 }
 
+// ─── 参考日记：本轮 Agent 检索/读取过的笔记 ───
+window.__noteRefs = [];
+window.__addNoteRef = function(ref) {
+    if (!ref || !ref.id) return;
+    for (var i = 0; i < window.__noteRefs.length; i++) {
+        if (window.__noteRefs[i].id === ref.id) return;
+    }
+    if (window.__noteRefs.length >= 8) return;
+    window.__noteRefs.push({
+        id: ref.id,
+        date: ref.date || '',
+        preview: String(ref.preview || '').substring(0, 120)
+    });
+};
+
+function renderNoteRefs(refs) {
+    if (!refs || !refs.length) return '';
+    var allNotes = [];
+    try { allNotes = DataService.notes.load() || []; } catch (e) {}
+    var byId = {};
+    for (var i = 0; i < allNotes.length; i++) byId[allNotes[i].id] = allNotes[i];
+    var seen = {};
+    var items = '';
+    var count = 0;
+    for (var j = 0; j < refs.length; j++) {
+        var r = refs[j];
+        if (!r || !r.id || seen[r.id]) continue;
+        seen[r.id] = 1;
+        var note = byId[r.id];
+        var content = note ? plainNoteText(note.content) : (r.preview || '');
+        var preview = r.preview || content.substring(0, 80);
+        var date = r.date || (note && note.createdAt ? String(note.createdAt).slice(0, 10) : '');
+        items += '<details class="nian-note-ref-item">' +
+            '<summary><span class="nian-note-ref-date">' + escapeHtml(date) + '</span>' +
+            '<span class="nian-note-ref-preview">' + escapeHtml(preview) + '</span></summary>' +
+            '<div class="nian-note-ref-content">' + escapeHtml(content) + '</div>' +
+            '</details>';
+        count++;
+    }
+    if (!count) return '';
+    return '<details class="nian-note-refs">' +
+        '<summary>参考日记 ' + count + ' 篇</summary>' +
+        '<div class="nian-note-ref-list">' + items + '</div>' +
+        '</details>';
+}
+window.renderNoteRefs = renderNoteRefs;
+
 function renderNianMessages() {
     var container = document.getElementById('nianChatMessages');
     if (!container) return;
@@ -496,7 +543,7 @@ function renderNianMessages() {
         if (m.role === 'user') {
             renderUserMessageEl(el, m.content || '');
         } else {
-            el.innerHTML = '<div class="nian-message-text">' + renderThinkContent(m.content || '') + '</div>';
+            el.innerHTML = '<div class="nian-message-text">' + renderThinkContent(m.content || '') + '</div>' + renderNoteRefs(m.refs);
         }
         container.appendChild(el);
     }
@@ -2083,6 +2130,26 @@ function executeInsight(modeId) {
             });
         }
 
+        // 只在用户表达回忆/自我觉察/情绪梳理等主观意图时，才提示 Agent 做笔记 RAG。
+        // 普通闲聊、事实问答优先使用模型自身的上下文与已注入记忆。
+        function hasSubjectiveIntent(text) {
+            var t = String(text || '');
+            if (!t) return false;
+            var patterns = [
+                /记得|记不记得|还记得|以前|之前|上次|那时候|当时|过去|回顾|回忆/,
+                /自我觉察|觉察|反思|复盘|认识自己|我是谁|我是什么样的人|我的模式|自我探索/,
+                /情绪|难过|焦虑|开心|低落|压力|心情|感受|状态/,
+                /我说过|我提过|我的日记|我的笔记|记录里|帮我找|帮我看看.*(日记|笔记|记录)|翻翻/,
+                /最近.*(怎么样|如何|状态|情绪|变化|进展)/,
+                /为什么我|我是不是|我总|我总是|我容易|我最近/
+            ];
+            for (var i = 0; i < patterns.length; i++) {
+                if (patterns[i].test(t)) return true;
+            }
+            return false;
+        }
+        window.hasSubjectiveIntent = hasSubjectiveIntent;
+
         function sendViaAgent(message) {
             var messagesContainer = document.getElementById('nianChatMessages');
             var typingId = showTypingIndicator();
@@ -2113,6 +2180,7 @@ function executeInsight(modeId) {
                 nianAgent.setHistory(conv.messages, conv.summary);
             }
 
+            window.__noteRefs = [];
             var beforeSummaryCount = nianAgent ? (nianAgent.summaryCount || 0) : 0;
 
             // 执行过程事件 → 步骤条
@@ -2145,11 +2213,16 @@ function executeInsight(modeId) {
                 sendTelemetry(log);
             };
 
-            var systemPrompt = buildNianSystemPrompt(message);
+            var subjectiveIntent = hasSubjectiveIntent(message);
+            window.__recallIntent = subjectiveIntent;
+            var recallRule = subjectiveIntent
+                ? '用户本轮有回忆/自我觉察/情绪梳理的主观意图。优先使用已注入的记忆和上下文；如果缺少具体历史细节，可以调用 search_notes 做 RAG 检索，并在回答中自然引用。'
+                : '本轮是普通对话。优先使用已注入的记忆和上下文直接回答；除非用户明确要求查找日记，否则不要调用 search_notes。';
+            var systemPrompt = buildNianSystemPrompt(message) + '\n\n## 检索策略\n' + recallRule;
 
             // RAG：把「用户此刻说的话」向量化，唤起相关回忆注入（失败静默回退，已注入的回忆段兜底）
             var promptReady = Promise.resolve(systemPrompt);
-            if (typeof MemoryService !== 'undefined' && typeof MemoryService.retrieveMoments === 'function') {
+            if (subjectiveIntent && typeof MemoryService !== 'undefined' && typeof MemoryService.retrieveMoments === 'function') {
                 promptReady = MemoryService.retrieveMoments(message, 4, systemPrompt).then(function(ragText) {
                     return ragText ? systemPrompt + ragText : systemPrompt;
                 });
@@ -2165,9 +2238,10 @@ function executeInsight(modeId) {
                 silentExtractFromChat(message, text);
 
                 // save assistant message to conversation history
+                var refs = (window.__noteRefs || []).slice();
                 var conv = getCurrentConv();
                 if (conv) {
-                    conv.messages.push({ role: 'assistant', content: text });
+                    conv.messages.push({ role: 'assistant', content: text, refs: refs });
                     conv.updatedAt = new Date().toISOString();
                     // 持久化对话摘要，刷新/切对话后仍可恢复
                     if (nianAgent && typeof nianAgent.summary === 'string' && nianAgent.summary) {
@@ -2184,7 +2258,7 @@ function executeInsight(modeId) {
                 // 让 renderThinkContent 处理 <think> 标签
                 var assistantMsg = document.createElement('div');
                 assistantMsg.className = 'nian-message assistant';
-                assistantMsg.innerHTML = '<div class="nian-message-text">' + renderThinkContent(text) + '</div>';
+                assistantMsg.innerHTML = '<div class="nian-message-text">' + renderThinkContent(text) + '</div>' + renderNoteRefs(refs);
                 messagesContainer.appendChild(assistantMsg);
                 scrollToBottom();
             }).catch(function(err) {
