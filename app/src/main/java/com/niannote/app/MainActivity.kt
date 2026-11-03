@@ -786,6 +786,12 @@ class MainActivity : AppCompatActivity() {
             }
             prefs.edit().putString("mails", remaining.toString()).apply()
         }
+
+        @JavascriptInterface
+        fun clearAll() {
+            val prefs = context.getSharedPreferences(mailsKey, Context.MODE_PRIVATE)
+            prefs.edit().putString("mails", "[]").apply()
+        }
     }
 
     inner class MemoryInterface(private val context: Context) {

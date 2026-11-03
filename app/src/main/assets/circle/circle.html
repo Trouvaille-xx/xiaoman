@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>小满 · 朋友圈</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="circle.css">
+</head>
+<body>
+    <div class="circle-app">
+        <div class="circle-header">
+            <div class="circle-back" onclick="goBack()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </div>
+            <div class="circle-title">朋友圈</div>
+            <div class="circle-actions">
+                <div class="circle-icon" id="refreshBtn" onclick="manualRefresh()" title="刷新动态">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                </div>
+                <div class="circle-icon" onclick="openAddFriend()" title="添加好友">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="circle-tabs">
+            <div class="circle-tab active" id="tabFeed" onclick="switchTab('feed')">动态</div>
+            <div class="circle-tab" id="tabFriends" onclick="switchTab('friends')">好友</div>
+            <div class="circle-tab" id="tabMessages" onclick="switchTab('messages')">消息<span class="tab-badge" id="msgTabBadge" style="display:none">0</span></div>
+        </div>
+
+        <div class="circle-main">
+            <div class="circle-view active" id="feedView">
+                <div id="feedList"></div>
+            </div>
+            <div class="circle-view" id="friendsView">
+                <div class="view-toolbar">
+                    <button class="soft-btn primary" onclick="openAddFriend()">＋ 添加好友</button>
+                </div>
+                <div id="friendsList"></div>
+            </div>
+            <div class="circle-view" id="messagesView">
+                <div id="messagesList"></div>
+            </div>
+        </div>
+
+        <div class="sheet-overlay" id="addOverlay" onclick="closeAddFriend()"></div>
+        <div class="sheet" id="addSheet">
+            <div class="sheet-head">
+                <span>添加好友</span>
+                <span class="sheet-close" onclick="closeAddFriend()">×</span>
+            </div>
+            <div class="sheet-body" id="addFriendList"></div>
+        </div>
+
+        <div class="chat-view" id="chatView">
+            <div class="chat-header">
+                <div class="circle-back" onclick="closeChat()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </div>
+                <div class="chat-head-main" id="chatHead"></div>
+            </div>
+            <div class="chat-body" id="chatBody"></div>
+            <div class="chat-compose">
+                <textarea id="chatInput" placeholder="发消息..." rows="1"></textarea>
+                <button id="chatSendBtn" onclick="sendChat()">发送</button>
+            </div>
+        </div>
+
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script src="../app-config.js"></script>
+    <script src="../native-http.js"></script>
+    <script src="circle.js"></script>
+</body>
+</html>

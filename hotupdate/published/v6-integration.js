@@ -230,8 +230,18 @@
         } catch(e) { return 0; }
     }
 
+    function getCircleUnreadCount() {
+        try {
+            var st = JSON.parse(localStorage.getItem('nian_circle_v1') || '{}');
+            var sum = Number(st.unreadPosts || 0);
+            var u = st.unread || {};
+            for (var k in u) if (u.hasOwnProperty(k)) sum += Number(u[k] || 0);
+            return sum;
+        } catch (e) { return 0; }
+    }
+
     window.updateMailBadge = function() {
-        var count = getUnreadMailCount();
+        var count = getCircleUnreadCount();
         // Hamburger badge
         var badge = document.getElementById('hamburgerMailBadge');
         if (!badge) {
@@ -254,13 +264,14 @@
     // Update badge periodically and on page switch
     setInterval(updateMailBadge, 5000);
     setTimeout(updateMailBadge, 2000);
-    window.openMailbox = function() {
+    window.openCircle = function() {
         if (typeof AndroidStorage !== 'undefined') {
-            window.location.href = 'mail/mail.html';
+            window.location.href = 'circle/circle.html';
         } else {
-            window.location.href = 'app/src/main/assets/mail/mail.html';
+            window.location.href = 'app/src/main/assets/circle/circle.html';
         }
     };
+    window.openMailbox = window.openCircle;
     var _origCloseFab = closeFab;
     window.closeFab = function() {
         try { _origCloseFab(); } catch(e) {}
