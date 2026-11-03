@@ -33,6 +33,32 @@ function truncateText(text, maxChars) {
     '- 不超过 400 字\n' +
     '- 只输出摘要本身，不要任何解释';
 
+  function readAgentConfig() {
+    try {
+      if (typeof window !== 'undefined' && window.DataService && window.DataService.settings) {
+        return window.DataService.settings.load() || {};
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  function num(v, fallback) {
+    var n = Number(v);
+    return isFinite(n) && n > 0 ? n : fallback;
+  }
+
+  // 从设置读取上下文策略。默认 3000；模型支持长上下文时可调到 32k/128k/1M。
+  function applyAgentConfig(self) {
+    var cfg = readAgentConfig();
+    var budget = Math.max(1000, Math.min(1000000, num(cfg.contextBudgetTokens, 3000)));
+    self.contextBudgetTokens = budget;
+    self.maxHistory = Math.max(20, Math.min(200, Math.round(budget / 2000)));
+    self.maxToolResultChars = Math.max(1200, Math.min(64000, num(cfg.maxToolResultChars, Math.round(budget * 0.15))));
+    self.recentKeepCount = Math.max(6, Math.min(60, num(cfg.recentKeepCount, Math.round(budget / 2000))));
+    self.summaryMaxChars = Math.max(600, Math.min(8000, num(cfg.summaryMaxChars, Math.round(budget / 40))));
+    self.maxUserMessageChars = Math.max(4000, Math.min(100000, num(cfg.maxUserMessageChars, budget * 2)));
+  }
+
   function Agent() {
     this.skills = {};
     this.messages = [];
@@ -50,7 +76,13 @@ function truncateText(text, maxChars) {
     this.onStep = null; // 执行过程事件回调（工具调用/结果/总结），供 UI 展示
     this.onLog = null;  // 每次对话完成后的日志回调（供后台统计/排障）
     this._steps = [];
+    applyAgentConfig(this);
   }
+
+  Agent.prototype.reloadConfig = function() {
+    applyAgentConfig(this);
+    return this;
+  };
 
   // 发射执行过程事件并记录到本轮步骤列表
   Agent.prototype.emitStep = function(step) {
@@ -207,7 +239,7 @@ function truncateText(text, maxChars) {
           { role: "user", content: userContent }
         ],
         temperature: 0.3,
-        max_tokens: 400
+        max_tokens: Math.min(2000, Math.max(400, Math.ceil(self.summaryMaxChars / 2)))
       };
       self._callLLM(payload, function(err, response) {
         if (err) {

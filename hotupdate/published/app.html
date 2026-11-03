@@ -4252,6 +4252,11 @@
                                 <div class="settings-desc">输入 AI 模型名称（如 gpt-4o、deepseek-chat 等）</div>
                                 <input class="settings-input" id="aiModel" placeholder="gpt-4o" />
                             </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">上下文预算（tokens）</div>
+                                <div class="settings-desc">每次对话最多携带的上下文 token 数。模型支持长上下文时可填 32000、128000 或 1000000；越大越记得住，但更慢、更贵。留空默认 3000。</div>
+                                <input class="settings-input" id="aiContextBudget" type="number" min="1000" max="1000000" step="1000" placeholder="3000" />
+                            </div>
                         </div>
                         <div class="settings-group">
                             <div class="settings-group-item">

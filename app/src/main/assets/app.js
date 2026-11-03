@@ -3625,6 +3625,8 @@ function shareNote(encodedContent) {
                 if (data.apiUrl) document.getElementById('aiApiUrl').value = data.apiUrl;
                 if (data.apiKey) document.getElementById('aiApiKey').value = data.apiKey;
                 if (data.model) document.getElementById('aiModel').value = data.model;
+                var budgetEl = document.getElementById('aiContextBudget');
+                if (budgetEl && data.contextBudgetTokens) budgetEl.value = data.contextBudgetTokens;
                 if (data.imageModel) document.getElementById('aiImageModel').value = data.imageModel;
                 if (data.imageApiUrl) document.getElementById('aiImageApiUrl').value = data.imageApiUrl;
                 if (data.imageApiKey) document.getElementById('aiImageApiKey').value = data.imageApiKey;
@@ -3635,6 +3637,8 @@ function shareNote(encodedContent) {
             var apiUrl = document.getElementById('aiApiUrl').value.trim();
             var apiKey = document.getElementById('aiApiKey').value.trim();
             var model = document.getElementById('aiModel').value;
+            var contextBudgetEl = document.getElementById('aiContextBudget');
+            var contextBudget = contextBudgetEl ? contextBudgetEl.value.trim() : '';
             var imageModel = document.getElementById('aiImageModel').value.trim();
             var imageApiUrl = document.getElementById('aiImageApiUrl').value.trim();
             var imageApiKey = document.getElementById('aiImageApiKey').value.trim();
@@ -3646,11 +3650,24 @@ function shareNote(encodedContent) {
                 return;
             }
 
+            var budgetNum = 0;
+            if (contextBudget) {
+                budgetNum = parseInt(contextBudget, 10);
+                if (!isFinite(budgetNum) || budgetNum < 1000) {
+                    statusEl.textContent = '上下文预算至少填 1000 tokens';
+                    statusEl.className = 'settings-status error';
+                    return;
+                }
+                if (budgetNum > 1000000) budgetNum = 1000000;
+            }
+
             // 合并保存，避免覆盖 insightPrompts / proactiveMails / lastDreamAt 等其他设置
             var settings = DataService.settings.load() || {};
             settings.apiUrl = apiUrl;
             settings.apiKey = apiKey;
             settings.model = model;
+            if (budgetNum) settings.contextBudgetTokens = budgetNum;
+            else delete settings.contextBudgetTokens;
             if (imageModel) settings.imageModel = imageModel;
             else delete settings.imageModel;
             if (imageApiUrl) settings.imageApiUrl = imageApiUrl;
@@ -3659,7 +3676,8 @@ function shareNote(encodedContent) {
             else delete settings.imageApiKey;
             try {
                 DataService.settings.save(settings);
-                statusEl.textContent = '设置已保存';
+                if (nianAgent && nianAgent.reloadConfig) nianAgent.reloadConfig();
+                statusEl.textContent = '设置已保存' + (budgetNum ? '（上下文预算 ' + budgetNum + ' tokens）' : '');
                 statusEl.className = 'settings-status success';
                 setTimeout(function() {
                     statusEl.className = 'settings-status';
