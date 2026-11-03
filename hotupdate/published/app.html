@@ -4260,6 +4260,38 @@
                         </div>
                         <div class="settings-group">
                             <div class="settings-group-item">
+                                <div class="settings-label">笔记 RAG（SiliconFlow）</div>
+                                <div class="settings-desc">用 Qwen3-Embedding 做向量召回，再用 Qwen3-Reranker 重排；留空 Key 则退回 BM25 + LLM 重排。</div>
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">Embedding API 地址</div>
+                                <input class="settings-input" id="aiEmbeddingUrl" placeholder="https://api.siliconflow.cn/v1/embeddings" />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">SiliconFlow API Key</div>
+                                <div class="settings-desc">Embedding 和 Rerank 共用；只保存在本机，不会上传到 GitHub</div>
+                                <input class="settings-input" id="aiEmbeddingKey" type="password" placeholder="sk-..." />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">Embedding 模型</div>
+                                <input class="settings-input" id="aiEmbeddingModel" placeholder="Qwen/Qwen3-Embedding-8B" />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">Rerank API 地址</div>
+                                <input class="settings-input" id="aiRerankUrl" placeholder="https://api.siliconflow.cn/v1/rerank" />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">Rerank 模型</div>
+                                <input class="settings-input" id="aiRerankModel" placeholder="Qwen/Qwen3-Reranker-8B" />
+                            </div>
+                            <div class="settings-group-item">
+                                <div class="settings-label">笔记向量索引</div>
+                                <div class="settings-desc" id="noteRagStatus">保存设置后，可点下方按钮为全部笔记建立索引</div>
+                                <button class="settings-btn settings-btn-secondary" onclick="rebuildNoteRagIndex()" style="margin-top:8px;">重建笔记向量索引</button>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <div class="settings-group-item">
                                 <div class="settings-label">配图模型</div>
                                 <div class="settings-desc">图像生成模型（如 gpt-image-2、dall-e-3），留空则默认 gpt-image-2</div>
                                 <input class="settings-input" id="aiImageModel" placeholder="gpt-image-2" />
@@ -4550,6 +4582,7 @@
     <script src="native-http.js"></script>
     <script src="memory-service.js"></script>
     <script src="memory-engine.js"></script>
+    <script src="note-rag.js"></script>
     <script src="conversation-memory.js"></script>
     <script src="skills/send_proactive_mail.js"></script>
     <script src="skills/update_archive.js"></script>

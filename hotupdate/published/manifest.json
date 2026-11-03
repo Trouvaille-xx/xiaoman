@@ -1,7 +1,7 @@
 {
-  "version": "20261103-211459-cd5afd",
-  "updatedAt": "2026-11-03T13:14:59.754Z",
-  "count": 50,
+  "version": "20261103-213401-a952d2",
+  "updatedAt": "2026-11-03T13:34:01.126Z",
+  "count": 51,
   "files": [
     {
       "path": "agent.js",
@@ -15,13 +15,13 @@
     },
     {
       "path": "app.html",
-      "hash": "6696c70f5d4e86393b2bc920280c88a3d33ed394",
-      "size": 168090
+      "hash": "0887f620608bc8d478a1c92b8169063e154c1bf8",
+      "size": 170770
     },
     {
       "path": "app.js",
-      "hash": "6bcc73c458476b2ae4e42fd43cad48273bec722a",
-      "size": 206208
+      "hash": "44a73f14e43307a8c98d015775f1c0b83afe6fbc",
+      "size": 209263
     },
     {
       "path": "conversation-memory.js",
@@ -134,6 +134,11 @@
       "size": 8542
     },
     {
+      "path": "note-rag.js",
+      "hash": "44eca7631aed1e25febf28d5bf6ed7511e841151",
+      "size": 11018
+    },
+    {
       "path": "penpals_data.json",
       "hash": "80bc5f76fd99d61a17444ff5244c071c64ea16f5",
       "size": 4069
@@ -195,8 +200,8 @@
     },
     {
       "path": "skills/search_notes.js",
-      "hash": "eb5f0e031dbf6ab782a18d7b743c97acdb8f58b6",
-      "size": 11847
+      "hash": "95373e833ddce7d399f41e66c1344175e9b959b8",
+      "size": 14526
     },
     {
       "path": "skills/send_proactive_mail.js",

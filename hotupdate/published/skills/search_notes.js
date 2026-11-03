@@ -120,6 +120,32 @@
     return out;
   }
 
+  function mergeVectorCandidates(base, vector) {
+    var map = {};
+    var maxB = 1;
+    for (var b = 0; b < base.length; b++) if ((base[b].score || 0) > maxB) maxB = base[b].score;
+    for (var i = 0; i < base.length; i++) {
+      var bc = base[i];
+      map[bc.note.id] = { note: bc.note, bm25: bc.score || 0, vec: 0, match: bc.score ? 'bm25' : 'recent', rankB: i };
+    }
+    var vec = vector || [];
+    for (var j = 0; j < vec.length; j++) {
+      var vc = vec[j];
+      var id = vc.note.id;
+      if (!map[id]) map[id] = { note: vc.note, bm25: 0, vec: 0, match: 'vector', rankB: 999 };
+      map[id].vec = Math.max(map[id].vec || 0, vc.score || 0);
+      map[id].rankV = j;
+      if (map[id].bm25) map[id].match = 'hybrid';
+    }
+    var arr = Object.keys(map).map(function(k) { return map[k]; });
+    for (var a = 0; a < arr.length; a++) {
+      var bm = arr[a].bm25 ? arr[a].bm25 / maxB : 0;
+      arr[a].score = (arr[a].vec || 0) * 0.65 + bm * 0.35;
+    }
+    arr.sort(function(x, y) { return y.score - x.score; });
+    return arr.slice(0, 24);
+  }
+
   function parseIds(text) {
     var s = String(text || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<\/?think>/gi, '');
     s = s.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
@@ -189,7 +215,7 @@
     });
   }
 
-  function pageResults(ranked, args, reranked, query) {
+  function pageResults(ranked, args, reranked, query, meta) {
     var offset = Math.max(0, parseInt(args.offset, 10) || 0);
     var limit = Math.max(1, Math.min(8, parseInt(args.limit, 10) || 8));
     var page = ranked.slice(offset, offset + limit);
@@ -204,7 +230,7 @@
         match: item.match || 'recent'
       };
     });
-    return {
+    var out = {
       query: query || '',
       reranked: !!reranked,
       total: ranked.length,
@@ -213,12 +239,14 @@
       hasMore: offset + notes.length < ranked.length,
       notes: notes
     };
+    if (meta) out.rag = meta;
+    return out;
   }
 
   window.searchNotesSkill = {
     definition: {
       name: "search_notes",
-      description: "混合 RAG 搜索日记笔记：BM25 召回 + LLM 语义重排（无需 embedding）。返回紧凑索引（id、日期、50字预览、标签、score），带 total/offset/hasMore。默认最多 8 条；用 offset 翻页，用 query/tags/days 缩小范围；需要全文时用 get_note(noteId)。",
+      description: "三级 RAG 搜索日记笔记：Qwen3-Embedding 向量召回 + BM25 + Qwen3-Reranker 语义重排；未配置 embedding 时退回 BM25 + LLM 重排。返回紧凑索引（id、日期、50字预览、标签、score），带 total/offset/hasMore 和 rag 索引状态。默认最多 8 条；用 offset 翻页，用 query/tags/days 缩小范围；需要全文时用 get_note(noteId)。",
       parameters: {
         type: "object",
         properties: {
@@ -227,7 +255,7 @@
           days: { type: "number", description: "最近 N 天的笔记（从今天往前推）" },
           offset: { type: "number", description: "从第几条开始返回，默认 0；配合 hasMore 翻页" },
           limit: { type: "number", description: "最多返回条数，默认 8，最大 8；需要更多请用 offset 翻页" },
-          rerank: { type: "boolean", description: "是否用 LLM 做语义重排，默认 true；设为 false 只做 BM25" }
+          rerank: { type: "boolean", description: "是否做语义重排，默认 true；设为 false 只做向量/BM25 召回" }
         }
       }
     },
@@ -272,15 +300,48 @@
       for (var i = 0; i < candidates.length; i++) {
         if (candidates[i].score > 0) candidates[i].match = 'bm25';
       }
-      if (args.rerank === false) return pageResults(candidates, args, false, args.query);
 
       var settings = null;
       try { settings = window.DataService.settings.load(); } catch (e) {}
-      return rerankWithLLM(args.query, candidates, settings).then(function(ranked) {
-        for (var r = 0; r < ranked.length; r++) {
-          if (ranked[r].match !== 'bm25') ranked[r].match = 'semantic';
-        }
-        return pageResults(ranked, args, true, args.query);
+
+      var rag = window.NoteRAG;
+      var ragOn = !!(rag && typeof rag.enabled === 'function' && rag.enabled());
+      var ragPromise = Promise.resolve({ items: [], meta: null });
+      if (ragOn) {
+        ragPromise = rag.ensureIndex(filtered, { maxNew: 64 }).then(function(stats) {
+          if (!stats || !stats.ok) return { items: [], meta: stats };
+          return rag.search(args.query, filtered, 24).then(function(items) {
+            return { items: items || [], meta: stats };
+          });
+        }, function() { return { items: [], meta: null }; });
+      }
+
+      return ragPromise.then(function(v) {
+        var merged = mergeVectorCandidates(candidates, v.items);
+        var meta = {
+          ragEnabled: ragOn,
+          ragIndexed: v.meta && v.meta.indexed != null ? v.meta.indexed : null,
+          ragTotal: v.meta && v.meta.total != null ? v.meta.total : null
+        };
+        if (args.rerank === false) return pageResults(merged, args, false, args.query, meta);
+
+        var rerankPromise = ragOn ? rag.rerank(args.query, merged, 24) : Promise.resolve(null);
+        return rerankPromise.then(function(rr) {
+          if (rr && rr.length) {
+            for (var r = 0; r < rr.length; r++) {
+              if (!rr[r].match || rr[r].match === 'bm25' || rr[r].match === 'vector') rr[r].match = 'rerank';
+            }
+            return pageResults(rr, args, true, args.query, meta);
+          }
+          return rerankWithLLM(args.query, merged, settings).then(function(ranked) {
+            for (var j = 0; j < ranked.length; j++) {
+              if (ranked[j].match === 'bm25' || ranked[j].match === 'vector' || ranked[j].match === 'hybrid') {
+                ranked[j].match = 'semantic';
+              }
+            }
+            return pageResults(ranked, args, true, args.query, meta);
+          });
+        });
       });
     }
   };

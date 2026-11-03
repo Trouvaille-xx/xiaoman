@@ -3627,6 +3627,11 @@ function shareNote(encodedContent) {
                 if (data.model) document.getElementById('aiModel').value = data.model;
                 var budgetEl = document.getElementById('aiContextBudget');
                 if (budgetEl && data.contextBudgetTokens) budgetEl.value = data.contextBudgetTokens;
+                var ragMap = [['aiEmbeddingUrl','embeddingApiUrl'],['aiEmbeddingKey','embeddingApiKey'],['aiEmbeddingModel','embeddingModel'],['aiRerankUrl','rerankApiUrl'],['aiRerankModel','rerankModel']];
+                for (var ri = 0; ri < ragMap.length; ri++) {
+                    var rel = document.getElementById(ragMap[ri][0]);
+                    if (rel && data[ragMap[ri][1]]) rel.value = data[ragMap[ri][1]];
+                }
                 if (data.imageModel) document.getElementById('aiImageModel').value = data.imageModel;
                 if (data.imageApiUrl) document.getElementById('aiImageApiUrl').value = data.imageApiUrl;
                 if (data.imageApiKey) document.getElementById('aiImageApiKey').value = data.imageApiKey;
@@ -3639,6 +3644,11 @@ function shareNote(encodedContent) {
             var model = document.getElementById('aiModel').value;
             var contextBudgetEl = document.getElementById('aiContextBudget');
             var contextBudget = contextBudgetEl ? contextBudgetEl.value.trim() : '';
+            var embeddingUrl = document.getElementById('aiEmbeddingUrl') ? document.getElementById('aiEmbeddingUrl').value.trim() : '';
+            var embeddingKey = document.getElementById('aiEmbeddingKey') ? document.getElementById('aiEmbeddingKey').value.trim() : '';
+            var embeddingModel = document.getElementById('aiEmbeddingModel') ? document.getElementById('aiEmbeddingModel').value.trim() : '';
+            var rerankUrl = document.getElementById('aiRerankUrl') ? document.getElementById('aiRerankUrl').value.trim() : '';
+            var rerankModel = document.getElementById('aiRerankModel') ? document.getElementById('aiRerankModel').value.trim() : '';
             var imageModel = document.getElementById('aiImageModel').value.trim();
             var imageApiUrl = document.getElementById('aiImageApiUrl').value.trim();
             var imageApiKey = document.getElementById('aiImageApiKey').value.trim();
@@ -3668,6 +3678,11 @@ function shareNote(encodedContent) {
             settings.model = model;
             if (budgetNum) settings.contextBudgetTokens = budgetNum;
             else delete settings.contextBudgetTokens;
+            if (embeddingUrl) settings.embeddingApiUrl = embeddingUrl; else delete settings.embeddingApiUrl;
+            if (embeddingKey) settings.embeddingApiKey = embeddingKey; else delete settings.embeddingApiKey;
+            if (embeddingModel) settings.embeddingModel = embeddingModel; else delete settings.embeddingModel;
+            if (rerankUrl) settings.rerankApiUrl = rerankUrl; else delete settings.rerankApiUrl;
+            if (rerankModel) settings.rerankModel = rerankModel; else delete settings.rerankModel;
             if (imageModel) settings.imageModel = imageModel;
             else delete settings.imageModel;
             if (imageApiUrl) settings.imageApiUrl = imageApiUrl;
@@ -3677,6 +3692,12 @@ function shareNote(encodedContent) {
             try {
                 DataService.settings.save(settings);
                 if (nianAgent && nianAgent.reloadConfig) nianAgent.reloadConfig();
+                if (window.NoteRAG && document.getElementById('noteRagStatus')) {
+                    var st = NoteRAG.stats(notes);
+                    document.getElementById('noteRagStatus').textContent = st.enabled
+                        ? ('已索引 ' + st.indexed + ' / ' + st.total + ' 条，模型 ' + st.model)
+                        : '未配置 Embedding Key，当前退回 BM25 + LLM 重排';
+                }
                 statusEl.textContent = '设置已保存' + (budgetNum ? '（上下文预算 ' + budgetNum + ' tokens）' : '');
                 statusEl.className = 'settings-status success';
                 setTimeout(function() {
@@ -3688,6 +3709,23 @@ function shareNote(encodedContent) {
                 statusEl.className = 'settings-status error';
             }
         }
+
+        function rebuildNoteRagIndex() {
+            var el = document.getElementById('noteRagStatus');
+            if (!window.NoteRAG) { if (el) el.textContent = 'NoteRAG 未加载'; return; }
+            if (!NoteRAG.enabled()) { if (el) el.textContent = '请先填写 SiliconFlow API Key 并保存'; return; }
+            if (el) el.textContent = '索引中… 0 / ' + notes.length;
+            NoteRAG.rebuildIndex(notes, function(done, total) {
+                if (el) el.textContent = '索引中… ' + done + ' / ' + total;
+            }).then(function(r) {
+                if (el) el.textContent = (r && r.ok)
+                    ? ('索引完成：' + r.indexed + ' / ' + r.total + ' 条')
+                    : ('索引失败：' + ((r && r.error) || '未知错误'));
+            }, function(e) {
+                if (el) el.textContent = '索引失败：' + (e && e.message ? e.message : e);
+            });
+        }
+        window.rebuildNoteRagIndex = rebuildNoteRagIndex;
 
         // 测试 AI 连接：发送一条简单消息，显示结果/错误，帮助诊断配置问题
         function testAIConnection() {
