@@ -50,7 +50,7 @@ function truncateText(text, maxChars) {
   // 从设置读取上下文策略。默认 3000；模型支持长上下文时可调到 32k/128k/1M。
   function applyAgentConfig(self) {
     var cfg = readAgentConfig();
-    var budget = Math.max(1000, Math.min(1000000, num(cfg.contextBudgetTokens, 3000)));
+    var budget = Math.max(1000, Math.min(1000000, num(cfg.contextBudgetTokens, 32000)));
     self.contextBudgetTokens = budget;
     self.maxHistory = Math.max(20, Math.min(200, Math.round(budget / 2000)));
     self.maxToolResultChars = Math.max(1200, Math.min(64000, num(cfg.maxToolResultChars, Math.round(budget * 0.15))));
@@ -65,7 +65,7 @@ function truncateText(text, maxChars) {
     this.maxHistory = 20;
     // 输入上下文 token 预算（含 system prompt 与摘要）。超预算时优先对最旧消息做
     // LLM 总结压缩（而不是直接丢弃），总结失败才回退截断。
-    this.contextBudgetTokens = 3000;
+    this.contextBudgetTokens = 32000;
     this.summaryMaxChars = 600;
     this.recentKeepCount = 6; // 总结后保留的最近消息条数
     this.maxToolResultChars = 1200;
