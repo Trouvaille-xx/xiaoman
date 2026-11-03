@@ -1520,6 +1520,23 @@
             max-width: 100%;
             min-width: 0;
         }
+
+        /* 助手消息纵向堆叠：气泡在上，参考日记在下，避免被 flex 挤成左右两列 */
+        .nian-msg-stack.nian-assistant-stack {
+            align-items: stretch;
+            flex: 1;
+            min-width: 0;
+            max-width: 100%;
+        }
+        .nian-message.assistant .nian-assistant-stack > .nian-message-text {
+            flex: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .nian-assistant-stack .nian-note-refs {
+            width: 100%;
+            box-sizing: border-box;
+        }
         .nian-msg-stack > .nian-message-text { width: auto; max-width: 100%; }
 
         /* 引用笔记折叠条：默认只占一行，点击展开全文 */

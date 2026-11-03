@@ -543,7 +543,7 @@ function renderNianMessages() {
         if (m.role === 'user') {
             renderUserMessageEl(el, m.content || '');
         } else {
-            el.innerHTML = '<div class="nian-message-text">' + renderThinkContent(m.content || '') + '</div>' + renderNoteRefs(m.refs);
+            el.innerHTML = '<div class="nian-msg-stack nian-assistant-stack"><div class="nian-message-text">' + renderThinkContent(m.content || '') + '</div>' + renderNoteRefs(m.refs) + '</div>';
         }
         container.appendChild(el);
     }
@@ -2258,7 +2258,7 @@ function executeInsight(modeId) {
                 // 让 renderThinkContent 处理 <think> 标签
                 var assistantMsg = document.createElement('div');
                 assistantMsg.className = 'nian-message assistant';
-                assistantMsg.innerHTML = '<div class="nian-message-text">' + renderThinkContent(text) + '</div>' + renderNoteRefs(refs);
+                assistantMsg.innerHTML = '<div class="nian-msg-stack nian-assistant-stack"><div class="nian-message-text">' + renderThinkContent(text) + '</div>' + renderNoteRefs(refs) + '</div>';
                 messagesContainer.appendChild(assistantMsg);
                 scrollToBottom();
             }).catch(function(err) {
