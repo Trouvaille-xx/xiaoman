@@ -4012,16 +4012,15 @@ function shareNote(encodedContent) {
                 var html = e.target.result;
                 statusEl.textContent = '正在解析笔记...';
 
-                var memoRegex = /<div class="memo">[\s\S]*?<div class="time">([^<]+)<\/div>[\s\S]*?<div class="content">([\s\S]*?)<\/div>/g;
-                var match;
+                var doc = null;
+                try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (ex) {}
+                var memoNodes = doc ? doc.querySelectorAll('.memo') : [];
                 var imported = 0;
                 var skipped = 0;
 
-                while ((match = memoRegex.exec(html)) !== null) {
-                    var timeStr = match[1].trim();
-                    var contentHtml = match[2].trim();
-
-                    var content = contentHtml
+                function htmlToText(contentHtml) {
+                    return String(contentHtml || '')
+                        .replace(/<img[^>]*>/gi, '[图片]')
                         .replace(/<br[^>]*>/gi, '\n')
                         .replace(/<p[^>]*>/g, '').replace(/<\/p>/g, '\n')
                         .replace(/<li[^>]*>/g, '- ').replace(/<\/li>/g, '\n')
@@ -4032,17 +4031,37 @@ function shareNote(encodedContent) {
                         .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
                         .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"')
                         .replace(/\n{3,}/g, '\n\n').trim();
+                }
 
-                    if (!content) { skipped++; continue; }
-
+                function addImportedNote(timeStr, contentHtml) {
+                    var content = htmlToText(contentHtml);
+                    if (!content) { skipped++; return; }
                     var createdAt = timeStr;
                     try {
                         var d = new Date(timeStr.replace(' ', 'T'));
                         if (!isNaN(d.getTime())) createdAt = d.toISOString();
                     } catch(ex) {}
-
                     notes.push({ id: 'import_' + Date.now() + '_' + imported, content: content, createdAt: createdAt });
                     imported++;
+                }
+
+                if (memoNodes && memoNodes.length > 0) {
+                    for (var mi = 0; mi < memoNodes.length; mi++) {
+                        var memo = memoNodes[mi];
+                        var timeEl = memo.querySelector('.time');
+                        var contentEl = memo.querySelector('.content');
+                        addImportedNote(
+                            timeEl ? timeEl.textContent.trim() : '',
+                            contentEl ? contentEl.innerHTML : (memo.textContent || '')
+                        );
+                    }
+                } else {
+                    // 兼容旧版 flomo 导出结构
+                    var memoRegex = /<div class="memo">[\s\S]*?<div class="time">([^<]+)<\/div>[\s\S]*?<div class="content">([\s\S]*?)<\/div>/g;
+                    var match;
+                    while ((match = memoRegex.exec(html)) !== null) {
+                        addImportedNote(match[1].trim(), match[2].trim());
+                    }
                 }
 
                 persistNotes();
