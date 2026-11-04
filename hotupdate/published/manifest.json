@@ -1,6 +1,6 @@
 {
-  "version": "20261104-075904-07869c",
-  "updatedAt": "2026-11-03T23:59:04.406Z",
+  "version": "20261104-232239-cb4fdd",
+  "updatedAt": "2026-11-04T15:22:39.827Z",
   "count": 55,
   "files": [
     {
@@ -145,8 +145,8 @@
     },
     {
       "path": "model-settings.js",
-      "hash": "21e3e64c20fe48c08112304bd861c6728613b43d",
-      "size": 34260
+      "hash": "a07c610180b1a45585a3e75480e0aabf9a5c447d",
+      "size": 37113
     },
     {
       "path": "native-http.js",
@@ -235,8 +235,8 @@
     },
     {
       "path": "skills/web_search.js",
-      "hash": "e69bf8f4adddc426ec87f263ee6b084aa9bae9f7",
-      "size": 1928
+      "hash": "2e16095fcda0032ab78870792ba738e827949594",
+      "size": 3845
     },
     {
       "path": "stats.html",

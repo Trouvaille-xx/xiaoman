@@ -336,6 +336,18 @@
       '<div class="model-form-actions"><button class="model-mini-btn primary" onclick="ModelSettings.saveAdvanced()">保存预算</button></div>' +
       '<div id="mgrRagStatus" style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.6;"></div>' +
       '<div class="model-form-actions"><button class="model-mini-btn" onclick="ModelSettings.rebuildRag()">重建笔记向量索引</button></div>' +
+      '</div>' +
+      '<div class="model-section-title">联网搜索</div><div class="model-advanced">' +
+      '<label>DeepSeek 搜索 API 地址</label>' +
+      '<input id="mgrSearchUrl" value="' + esc(s.searchApiUrl || 'https://api.deepseek.com/v1/tools/search') + '" placeholder="https://api.deepseek.com/v1/tools/search">' +
+      '<label style="margin-top:10px;">DeepSeek Search API Key</label>' +
+      '<input id="mgrSearchKey" type="password" value="' + esc(s.searchApiKey || '') + '" placeholder="留空则自动使用已添加的 DeepSeek 服务商 Key">' +
+      '<label style="margin-top:10px;">返回条数（1-10）</label>' +
+      '<input id="mgrSearchCount" type="number" min="1" max="10" value="' + esc(s.searchCount || 5) + '">' +
+      '<div class="model-form-actions"><button class="model-mini-btn primary" onclick="ModelSettings.saveSearch()">保存搜索配置</button>' +
+      '<button class="model-mini-btn" onclick="ModelSettings.testSearch()">测试搜索</button></div>' +
+      '<div id="mgrSearchStatus" style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.6;"></div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.6;">DeepSeek 官方 API：POST /v1/tools/search，Bearer 鉴权。</div>' +
       '</div>';
 
     root.innerHTML = html;
@@ -682,6 +694,41 @@
         try { window.nianAgent.reloadConfig(); } catch (e) {}
       }
       toast('上下文预算已保存：' + n + ' tokens');
+    },
+    saveSearch: function() {
+      var urlEl = document.getElementById('mgrSearchUrl');
+      var keyEl = document.getElementById('mgrSearchKey');
+      var countEl = document.getElementById('mgrSearchCount');
+      var url = urlEl ? urlEl.value.trim() : '';
+      var key = keyEl ? keyEl.value.trim() : '';
+      var count = countEl ? parseInt(countEl.value, 10) : 5;
+      if (!url) url = 'https://api.deepseek.com/v1/tools/search';
+      if (!isFinite(count) || count < 1) count = 5;
+      count = Math.min(10, count);
+      var s = settings();
+      s.searchApiUrl = url;
+      if (key) s.searchApiKey = key; else delete s.searchApiKey;
+      s.searchCount = count;
+      saveSettings(s);
+      toast('搜索配置已保存');
+    },
+    testSearch: function() {
+      var el = document.getElementById('mgrSearchStatus');
+      if (el) el.textContent = '搜索中…';
+      ModelSettings.saveSearch();
+      if (typeof window.webSearchSkill === 'undefined') {
+        if (el) el.textContent = 'web_search 未加载';
+        return;
+      }
+      window.webSearchSkill.execute({ query: 'DeepSeek' }).then(function(r) {
+        if (!el) return;
+        if (r && r.error) { el.textContent = '失败：' + r.error; return; }
+        var n = (r && r.results && r.results.length) || 0;
+        var first = r && r.results && r.results[0];
+        el.textContent = '成功：' + n + ' 条' + (first ? ' · ' + (first.title || first.url) : '');
+      }, function(e) {
+        if (el) el.textContent = '失败：' + (e && e.message ? e.message : e);
+      });
     },
     rebuildRag: function() {
       var el = document.getElementById('mgrRagStatus');
