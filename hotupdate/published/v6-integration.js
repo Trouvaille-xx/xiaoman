@@ -15,7 +15,7 @@
 
     // ── switchToMe ──
     window.switchToMe = function() {
-        ['notesPage','nianPage','explorePage'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
+        ['notesPage','nianPage','explorePage','insightHubPage'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         document.getElementById('mePage').classList.add('active');
         ['navNotes','navNian','navExplore'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         document.getElementById('appHeader').style.display = 'flex';
@@ -41,7 +41,7 @@
     window.switchToExplore = function() {
         if (typeof closeNoteExpand === 'function') closeNoteExpand();
         if (typeof closeAllNoteMenus === 'function') closeAllNoteMenus();
-        ['notesPage','nianPage','mePage'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
+        ['notesPage','nianPage','mePage','insightHubPage'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         document.getElementById('explorePage').classList.add('active');
         ['navNotes','navNian'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         document.getElementById('navExplore').classList.add('active');
@@ -67,6 +67,7 @@
         _origSwitchToNotes();
         document.getElementById('mePage').classList.remove('active');
         document.getElementById('explorePage').classList.remove('active');
+        document.getElementById('insightHubPage').classList.remove('active');
         document.getElementById('navExplore').classList.remove('active');
         var hi = document.getElementById('historyIcon'); if (hi) hi.style.display = 'none';
         var hr = document.getElementById('headerRight'); if (hr) hr.style.display = 'none';
@@ -85,6 +86,7 @@
         _origSwitchToNian();
         document.getElementById('mePage').classList.remove('active');
         document.getElementById('explorePage').classList.remove('active');
+        document.getElementById('insightHubPage').classList.remove('active');
         document.getElementById('navExplore').classList.remove('active');
         var hi = document.getElementById('historyIcon'); if (hi) hi.style.display = '';
         var hr = document.getElementById('headerRight'); if (hr) hr.style.display = '';
@@ -780,6 +782,11 @@
     }
 
     window.switchToInsightHub = function() {
+        var origin = 'notes';
+        if (document.getElementById('explorePage').classList.contains('active')) origin = 'explore';
+        else if (document.getElementById('nianPage').classList.contains('active')) origin = 'nian';
+        else if (document.getElementById('mePage').classList.contains('active')) origin = 'me';
+        window.__insightHubReturn = origin;
         ['notesPage','nianPage','mePage','explorePage'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
         document.getElementById('insightHubPage').classList.add('active');
         ['navNotes','navNian','navExplore'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
@@ -788,7 +795,7 @@
         var header = document.getElementById('appHeader');
         header.style.display = 'flex';
         var hamburger = header.querySelector('.header-icon');
-        if (hamburger) hamburger.setAttribute('onclick', 'switchToNotes()');
+        if (hamburger) hamburger.setAttribute('onclick', 'insightHubBack()');
         // Update hamburger SVG to back arrow
         var svg = hamburger ? hamburger.querySelector('svg') : null;
         if (svg) svg.innerHTML = '<polyline points="15 18 9 12 15 6"/>';
@@ -822,6 +829,14 @@
             }).join('');
         }
         updateDrawerActive('insight');
+    };
+
+    window.insightHubBack = function() {
+        var to = window.__insightHubReturn || 'notes';
+        if (to === 'explore' && typeof switchToExplore === 'function') switchToExplore();
+        else if (to === 'nian' && typeof switchToNian === 'function') switchToNian();
+        else if (to === 'me' && typeof switchToMe === 'function') switchToMe();
+        else switchToNotes();
     };
 
     // ── Method Editor Popup ──

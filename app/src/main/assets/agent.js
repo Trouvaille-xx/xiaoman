@@ -284,6 +284,8 @@ function truncateText(text, maxChars) {
 
     var iterations = 0;
     var maxIterations = 10;
+    var emptyRetries = 0;
+    var EMPTY_FALLBACK = "刚刚没能生成有效回复。你可以再问一次，或检查「模型设置」里的文本模型、联网搜索配置是否正常。";
 
     function finish(ok, textOrErr) {
       var log = {
@@ -380,6 +382,13 @@ function truncateText(text, maxChars) {
 
         // 执行过程可见：发射工具结果事件（含成败与摘要）
         var isErr = result && typeof result === 'object' && (result.error || result.ok === false);
+        if (isErr) {
+          var errMsg = (result && result.error) ? String(result.error) : 'tool failed';
+          content = JSON.stringify({
+            error: errMsg,
+            hint: '工具调用失败。不要重复调用同一个工具；请基于已有信息直接回答用户，并说明该工具暂时不可用。'
+          });
+        }
         self.emitStep({
           type: 'tool_result',
           name: name,
@@ -412,7 +421,18 @@ function truncateText(text, maxChars) {
               executeTool(message.tool_calls[ti]);
             }
           } else {
-            var text = message.content || "";
+            var text = (message.content || "").trim();
+            if (!text && emptyRetries < 1) {
+              // 模型没有调用工具、也没输出内容：提醒它直接回答，再试一次
+              emptyRetries++;
+              self.messages.push({
+                role: "user",
+                content: "（系统提示：请直接回答上一条用户消息，不要再调用工具。）"
+              });
+              runLoop(resolve, reject);
+              return;
+            }
+            if (!text) text = EMPTY_FALLBACK;
             self.messages.push({ role: "assistant", content: text });
             finish(true, text);
             resolve(text);

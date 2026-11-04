@@ -2235,6 +2235,11 @@ function executeInsight(modeId) {
             }).then(function(text) {
                 hideTypingIndicator(typingId);
 
+                // 空回复兜底：避免出现空白气泡或任务“静默中止”
+                if (!text || !String(text).trim()) {
+                    text = "刚刚没能生成有效回复。你可以再问一次，或检查「模型设置」里的文本模型、联网搜索配置是否正常。";
+                }
+
                 // 小满回复中提到了某段回忆 → 记一次提起（防炒冷饭）
                 markRecalledMoments(text);
                 // 自动静默更新：从本轮对话中提取值得记住的时刻（节流）

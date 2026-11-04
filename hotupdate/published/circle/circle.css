@@ -246,7 +246,7 @@ button { border: none; background: none; cursor: pointer; }
 }
 .chat-body::-webkit-scrollbar { display: none; }
 .chat-msg { display: flex; gap: 8px; max-width: 86%; }
-.chat-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.chat-msg.user { align-self: flex-end; }
 .chat-msg.assistant { align-self: flex-start; }
 .chat-bubble {
     padding: 10px 12px; border-radius: 16px;
